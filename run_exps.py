@@ -55,8 +55,8 @@ def convert_data(data):
         else:
             prog = match.group("TYPE") or "rtspin"
             spin = (prog, match.group("ARGS"))
-            spins.append(spin)            
-        
+            spins.append(spin)
+
     return {'proc' : procs, 'spin' : spins}
 
 
@@ -80,7 +80,7 @@ def load_experiment(sched_file, scheduler, duration, param_file, out_base):
         raise IOError("Cannot find schedule file: %s" % sched_file)
 
     dirname = os.path.split(sched_file)[0]
-    
+
     if not scheduler or not duration:
         param_file = param_file or \
           "%s/%s" % (dirname, conf.DEFAULTS['params_file'])
@@ -89,7 +89,7 @@ def load_experiment(sched_file, scheduler, duration, param_file, out_base):
             params = load_params(param_file)
             scheduler = scheduler or params[conf.PARAMS['sched']]
             duration  = duration  or params[conf.PARAMS['dur']]
-            
+
         duration = duration or conf.DEFAULTS['duration']
 
         if not scheduler:
@@ -133,10 +133,10 @@ def run_exp(name, schedule, scheduler, duration, work_dir, out_dir):
     for entry_conf in schedule['proc']:
         path = entry_conf[0]
         data = entry_conf[1]
-        
+
         if not os.path.exists(path):
             raise IOError("Invalid proc path %s: %s" % (path, name))
-        
+
         proc_entries += [ProcEntry(path, data)]
 
     # Parse spinners
@@ -158,14 +158,14 @@ def run_exp(name, schedule, scheduler, duration, work_dir, out_dir):
 
         if not lu.is_executable(real_spin):
             raise OSError("Cannot run spin %s: %s" % (real_spin, name))
-        
+
         executables += [Executable(real_spin, real_args)]
 
     exp = Experiment(name, scheduler, work_dir, out_dir,
                      proc_entries, executables)
     exp.run_exp()
 
-    
+
 def main():
     opts, args = parse_args()
 
@@ -181,12 +181,12 @@ def main():
 
         if not os.path.exists(path):
             raise IOError("Invalid experiment: %s" % path)
-        
+
         if os.path.isdir(exp):
             path = "%s%s" % (path, opts.sched_file)
 
         load_experiment(path, scheduler, duration, param_file, out_base)
 
-        
+
 if __name__ == '__main__':
     main()
