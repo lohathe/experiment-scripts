@@ -117,7 +117,7 @@ def load_params(fname):
 
 def load_schedule(fname):
     with open(fname, 'r') as f:
-        data = f.read()
+        data = f.read().strip()
     try:
         schedule = eval(data)
     except:

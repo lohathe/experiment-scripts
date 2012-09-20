@@ -2,10 +2,14 @@ from __future__ import print_function
 import os
 import sys
 
+"""
+These are paths to repository directories.
+
+"""
 REPOS = {'liblitmus'   : '/home/hermanjl/git/liblitmus',
          'sched_trace' : '/home/hermanjl/git/sched_trace',
          'analysis'    : '/home/hermanjl/git/overhead-analysis-cjk',
-         'ft_tools'    : '/home/hermanjl/git/ft_tools/ftcat',
+         'ft_tools'    : '/home/hermanjl/git/feather-trace-tools',
          'trace-cmd'   : '/home/hermanjl/git/trace-cmd'}
 
 BINS = {'bespin'    : '{}/bespin'.format(REPOS['liblitmus']),
