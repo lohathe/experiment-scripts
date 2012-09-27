@@ -43,6 +43,9 @@ class Executable(object):
             full_command += self.extra_args
         return full_command
 
+    def __str__(self):
+        return " ".join(self.__get_full_command())
+
     def execute(self):
         """Execute the binary."""
         full_command = self.__get_full_command()

@@ -5,16 +5,17 @@ import config.config as conf
 import experiment.litmus_util as lu
 import os
 import re
+import traceback
 
-from collections import defaultdict
+from common import load_params
 from optparse import OptionParser
 from experiment.executable.executable import Executable
-from experiment.experiment import Experiment
+from experiment.experiment import Experiment,ExperimentDone
 from experiment.proc_entry import ProcEntry
 
 
 def parse_args():
-    parser = OptionParser();
+    parser = OptionParser("usage: %prog [options] [sched_file]... [exp_dir]...]")
 
     parser.add_option('-s', '--scheduler', dest='scheduler',
                       help='scheduler for all experiments')
@@ -81,6 +82,8 @@ def load_experiment(sched_file, scheduler, duration, param_file, out_base):
 
     dirname = os.path.split(sched_file)[0]
 
+    params = {}
+    
     if not scheduler or not duration:
         param_file = param_file or \
           "%s/%s" % (dirname, conf.DEFAULTS['params_file'])
@@ -93,27 +96,20 @@ def load_experiment(sched_file, scheduler, duration, param_file, out_base):
         duration = duration or conf.DEFAULTS['duration']
 
         if not scheduler:
-            raise IOError("Parameter scheduler not specified")
+            raise IOError("Parameter scheduler not specified in %s" % (param_file))
 
+    # Parse schedule file's intentions
     schedule = load_schedule(sched_file)
     (work_dir, out_dir) = get_dirs(sched_file, out_base)
 
     run_exp(sched_file, schedule, scheduler, duration, work_dir, out_dir)
 
-
-def load_params(fname):
-    params = defaultdict(int)
-    with open(fname, 'r') as f:
-        data = f.read()
-    try:
-        parsed = eval(data)
-        for k in parsed:
-            params[k] = parsed[k]
-    except Exception as e:
-        raise IOError("Invalid param file: %s\n%s" % (fname, e))
-
-    return params
-
+    # Save parameters used to run experiment in out_dir
+    out_params = dict(params.items() +
+                      [(conf.PARAMS['sched'], scheduler),
+                       (conf.PARAMS['dur'],   duration)])
+    with open("%s/%s" % (out_dir, conf.DEFAULTS['params_file']), 'w') as f:
+        f.write(str(out_params))
 
 def load_schedule(fname):
     with open(fname, 'r') as f:
@@ -176,6 +172,13 @@ def main():
 
     args = args or [opts.sched_file]
 
+    if not os.path.exists(out_base):
+        os.mkdir(out_base)
+
+    done = 0
+    succ = 0
+    failed = 0
+    
     for exp in args:
         path = "%s/%s" % (os.getcwd(), exp)
 
@@ -183,9 +186,24 @@ def main():
             raise IOError("Invalid experiment: %s" % path)
 
         if os.path.isdir(exp):
-            path = "%s%s" % (path, opts.sched_file)
+            path = "%s/%s" % (path, opts.sched_file)
 
-        load_experiment(path, scheduler, duration, param_file, out_base)
+        try:
+            load_experiment(path, scheduler, duration, param_file, out_base)
+            succ += 1
+        except ExperimentDone:
+            done += 1
+            print("Experiment '%s' already completed at '%s'" % (exp, out_base))
+        except:
+            print("Failed experiment %s" % exp)
+            traceback.print_exc()
+            failed += 1
+
+        
+    print("Experiments run:\t%d" % len(args))
+    print("  Successful:\t\t%d" % succ)
+    print("  Failed:\t\t%d" % failed)
+    print("  Skipped:\t\t%d" % done)
 
 
 if __name__ == '__main__':

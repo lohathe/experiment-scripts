@@ -94,7 +94,10 @@ class Experiment(object):
         self.log("Starting the program in ({0} seconds)".format(
             len(self.executables) * exec_pause))
         for e in self.executables:
-            e.execute()
+            try:
+                e.execute()
+            except:
+                raise Exception("Executable failed: %s" % e)                
             time.sleep(exec_pause)
 
         sleep_time = 2
