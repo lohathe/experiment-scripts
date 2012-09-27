@@ -1,8 +1,10 @@
 import litmus_util
 import os
+import config.config as conf
+
 from operator import methodcaller
 from executable.ftcat import FTcat,Executable
-from config.config import FILES,BINS
+
 
 class Tracer(object):
     def __init__(self, name, output_dir):
@@ -27,11 +29,11 @@ class LinuxTracer(Tracer):
         
         extra_args = ["record", "-e", "sched:sched_switch",
                       "-e", "litmus:*",
-                      "-o", "%s/%s" % (output_dir, FILES['linux_data'])]
+                      "-o", "%s/%s" % (output_dir, conf.FILES['linux_data'])]
         stdout = open('%s/trace-cmd-stdout.txt' % self.output_dir, 'w')
         stderr = open('%s/trace-cmd-stderr.txt' % self.output_dir, 'w')
         
-        execute = Executable(BINS['trace-cmd'], extra_args, stdout, stderr)
+        execute = Executable(conf.BINS['trace-cmd'], extra_args, stdout, stderr)
         self.bins.append(execute)
         
     @staticmethod
@@ -49,7 +51,7 @@ class LogTracer(Tracer):
     def __init__(self, output_dir):
         super(LogTracer, self).__init__("Logger", output_dir)
         
-        out_file = open("%s/%s" % (self.output_dir, FILES['log_data']), 'w')
+        out_file = open("%s/%s" % (self.output_dir, conf.FILES['log_data']), 'w')
 
         cat = (Executable("/bin/cat", [LogTracer.DEVICE_STR]))
         cat.stdout_file = out_file
@@ -62,7 +64,6 @@ class LogTracer(Tracer):
     
 
 class SchedTracer(Tracer):
-    EVENTS = range(501, 510) # not including 511
     DEVICE_STR = '/dev/litmus/sched_trace'
 
     def __init__(self, output_dir):
@@ -74,7 +75,7 @@ class SchedTracer(Tracer):
                 stdout_f = open('%s/st-%d.bin' % (self.output_dir, cpu), 'w')
                 stderr_f = open('%s/st-%d-stderr.txt' % (self.output_dir, cpu), 'w')
                 dev = '{0}{1}'.format(SchedTracer.DEVICE_STR, cpu)
-                ftc = FTcat(BINS['ftcat'], stdout_f, stderr_f, dev, SchedTracer.EVENTS, cpu=cpu)
+                ftc = FTcat(conf.BINS['ftcat'], stdout_f, stderr_f, dev, conf.SCHED_EVENTS, cpu=cpu)
 
                 self.bins.append(ftc)
 
@@ -85,22 +86,14 @@ class SchedTracer(Tracer):
     
 class OverheadTracer(Tracer):
     DEVICE_STR = '/dev/litmus/ft_trace0'
-    EVENTS = [# 'SCHED_START', 'SCHED_END', 'SCHED2_START', 'SCHED2_END',
-            'RELEASE_START', 'RELEASE_END',
-            'LVLA_RELEASE_START', 'LVLA_RELEASE_END',
-            'LVLA_SCHED_START', 'LVLA_SCHED_END',
-            'LVLB_RELEASE_START', 'LVLB_RELEASE_END',
-            'LVLB_SCHED_START', 'LVLB_SCHED_END',
-            'LVLC_RELEASE_START', 'LVLC_RELEASE_END',
-            'LVLC_SCHED_START', 'LVLC_SCHED_END']
 
     def __init__(self, output_dir):
         super(OverheadTracer, self).__init__("Overhead Trace", output_dir)
 
-        stdout_f = open('{0}/{1}'.format(self.output_dir, FILES['ft_data']), 'w')
-        stderr_f = open('{0}/{1}.stderr.txt'.format(self.output_dir, FILES['ft_data']), 'w')
-        ftc = FTcat(BINS['ftcat'], stdout_f, stderr_f,
-                OverheadTracer.DEVICE_STR, OverheadTracer.EVENTS)
+        stdout_f = open('{0}/{1}'.format(self.output_dir, conf.FILES['ft_data']), 'w')
+        stderr_f = open('{0}/{1}.stderr.txt'.format(self.output_dir, conf.FILES['ft_data']), 'w')
+        ftc = FTcat(conf.BINS['ftcat'], stdout_f, stderr_f,
+                OverheadTracer.DEVICE_STR, conf.ALL_EVENTS)
 
         self.bins.append(ftc)
 
