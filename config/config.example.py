@@ -36,8 +36,9 @@ FILES = {'ft_data'    : 'ft.bin',
          'sched_data' : 'st-{}.bin',
          'log_data'   : 'trace.slog',}
 
-PARAMS = {'sched' : 'scheduler',
-          'dur'   : 'duration'}
+PARAMS = {'sched'  : 'scheduler',
+          'dur'    : 'duration',
+          'kernel' : 'uname'}
 
 SCHED_EVENTS = range(501, 513)
 BASE_EVENTS  = ['SCHED', 'RELEASE', 'SCHED2', 'TICK', 'CXS']

@@ -39,6 +39,9 @@ def switch_scheduler(switch_to_in):
     if switch_to != cur_plugin:
         raise Exception("Could not switch to plugin: %s" % switch_to)
 
+def uname_matches(reg):
+    data = subprocess.check_output(["uname", "-r"])
+    return bool( re.match(reg, data) )
 
 def is_executable(fname):
     """Return whether the file passed in is executable"""

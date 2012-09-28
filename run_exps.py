@@ -13,6 +13,9 @@ from experiment.executable.executable import Executable
 from experiment.experiment import Experiment,ExperimentDone
 from experiment.proc_entry import ProcEntry
 
+def InvalidKernel(Exception):
+    def __init__(self, kernel):
+        self.kernel = kernel
 
 def parse_args():
     parser = OptionParser("usage: %prog [options] [sched_file]... [exp_dir]...]")
@@ -83,6 +86,7 @@ def load_experiment(sched_file, scheduler, duration, param_file, out_base):
     dirname = os.path.split(sched_file)[0]
 
     params = {}
+    kernel = ""
     
     if not scheduler or not duration:
         param_file = param_file or \
@@ -93,6 +97,10 @@ def load_experiment(sched_file, scheduler, duration, param_file, out_base):
             scheduler = scheduler or params[conf.PARAMS['sched']]
             duration  = duration  or params[conf.PARAMS['dur']]
 
+            # Experiments can specify required kernel name
+            if conf.PARAMS['kernel'] in params:
+                kernel = params[conf.PARAMS['kernel']]
+
         duration = duration or conf.DEFAULTS['duration']
 
         if not scheduler:
@@ -102,7 +110,7 @@ def load_experiment(sched_file, scheduler, duration, param_file, out_base):
     schedule = load_schedule(sched_file)
     (work_dir, out_dir) = get_dirs(sched_file, out_base)
 
-    run_exp(sched_file, schedule, scheduler, duration, work_dir, out_dir)
+    run_exp(sched_file, schedule, scheduler, kernel, duration, work_dir, out_dir)
 
     # Save parameters used to run experiment in out_dir
     out_params = dict(params.items() +
@@ -121,9 +129,12 @@ def load_schedule(fname):
     return schedule
 
 
-def run_exp(name, schedule, scheduler, duration, work_dir, out_dir):
+def run_exp(name, schedule, scheduler, kernel, duration, work_dir, out_dir):
     proc_entries = []
     executables  = []
+
+    if kernel and not lu.uname_matches(kernel):
+        raise InvalidKernel(kernel)
 
     # Parse values for proc entries
     for entry_conf in schedule['proc']:
@@ -178,6 +189,7 @@ def main():
     done = 0
     succ = 0
     failed = 0
+    invalid = 0
     
     for exp in args:
         path = "%s/%s" % (os.getcwd(), exp)
@@ -194,6 +206,8 @@ def main():
         except ExperimentDone:
             done += 1
             print("Experiment '%s' already completed at '%s'" % (exp, out_base))
+        except InvalidKernel:
+            invalid += 1
         except:
             print("Failed experiment %s" % exp)
             traceback.print_exc()
@@ -203,7 +217,8 @@ def main():
     print("Experiments run:\t%d" % len(args))
     print("  Successful:\t\t%d" % succ)
     print("  Failed:\t\t%d" % failed)
-    print("  Skipped:\t\t%d" % done)
+    print("  Already Done:\t\t%d" % done)
+    print("  Invalid Kernel:\t\t%d" % invalid)
 
 
 if __name__ == '__main__':
