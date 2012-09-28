@@ -1,5 +1,6 @@
 """
 TODO: make regexes indexable by name
+
 """
 
 import config.config as conf
@@ -8,10 +9,11 @@ import re
 import numpy as np
 import subprocess
 
-from collections import namedtuple
-from point import Measurement
+from collections import namedtuple,defaultdict
+from point import Measurement,Type
 
-Task = namedtuple('Task', ['pid', 'period'])
+TaskConfig = namedtuple('TaskConfig', ['cpu','wcet','period'])
+Task = namedtuple('Task', ['pid', 'config'])
 
 def get_st_output(data_dir, out_dir):
     bin_files = conf.FILES['sched_data'].format(".*")
@@ -32,32 +34,54 @@ def get_st_output(data_dir, out_dir):
     return output_file
 
 def get_tasks(data):
-    reg = r"PARAM.*?(\d+).*?cost:\s+[\d\.]+ms.*?period.*?([\d.]+)"
-    return [Task(x[0], x[1]) for x in re.findall(reg, data)]
+    reg = r"PARAM *?(\d+)\/.*?cost:\s+([\d\.]+)ms.*?period.*?([\d.]+)ms.*?part.*?(\d+)"
+    ret = []
+    for match in re.findall(reg, data):
+        t = Task(match[0], TaskConfig(match[3],match[1],match[2]))
+        ret += [t]
+    return ret
+
+def get_task_exits(data):
+    reg = r"TASK_EXIT *?(\d+)/.*?Avg.*?(\d+).*?Max.*?(\d+)"
+    ret = []
+    for match in re.findall(reg, data):
+        m = Measurement(match[0], {Type.Max : match[2], Type.Avg : match[1]})
+        ret += [m]
+    return ret
+        
 
 def extract_tardy_vals(data, exp_point):
-    ratios = []
-    tards = []
+    ratios    = []
+    avg_tards = []
+    max_tards = []
 
     for t in get_tasks(data):
-        reg = r"TARDY.*?" + t.pid + "/(\d+).*?Tot.*?([\d.]+).*?ms.*([\d.]+).*?ms.*?([\d.]+)"
+        reg = r"TARDY.*?" + t.pid + "/(\d+).*?Tot.*?([\d\.]+).*?ms.*([\d\.]+).*?ms.*?([\d\.]+)"
         matches = re.findall(reg, data)
         if len(matches) != 0:
             jobs = float(matches[0][0])
+
             total_tard = float(matches[0][1])
-            # max_tard = float(matches[0][2])
+            print("total tard: %s" % total_tard)
+            avg_tard = (total_tard / jobs) / float(t.config.period)
+            max_tard = float(matches[0][2]) / float(t.config.period)
+
+            print("avg tard: %s" % avg_tard)
+
             misses = float(matches[0][3])
-            rel_tard = (total_tard / jobs) / float(t.period)
             if misses != 0:
                 miss_ratio = (misses / jobs)
+                print("misses is %d, jobs is %d" % (misses, jobs))
             else:
                 miss_ratio = 0
 
-            ratios.append(miss_ratio)
-            tards.append(rel_tard)
+            ratios    += [miss_ratio]
+            avg_tards += [avg_tard]
+            max_tards += [max_tard]
 
-    for (array, name) in ((tards, "rel-tard"), (ratios, "miss-ratio")):
-        exp_point[name] = Measurement().from_array(array)
+    exp_point["avg-rel-tard"] = Measurement().from_array(avg_tards)
+    exp_point["max-rel-tard"] = Measurement().from_array(max_tards)
+    exp_point["miss-ratio"] = Measurement().from_array(ratios)
 
 def extract_variance(data, exp_point):
     varz = []
@@ -77,17 +101,70 @@ def extract_variance(data, exp_point):
 
         varz.append(corrected)
 
-    exp_point['var'] = Measurement().from_array(varz)
+    exp_point['exec-var'] = Measurement().from_array(varz)
 
-def get_sched_data(data_file, result):
+def extract_sched_data(data_file, result):
     with open(data_file, 'r') as f:
         data = f.read()
 
-        # if conf != BASE:
-        #     (our_values, their_values) = extract_exec_vals(our_data, their_data)
-        #     conf_result = get_stats(our_values, their_values)
-        #     for key in conf_result.keys():
-        #         result[key][conf] = conf_result[key]
+    extract_tardy_vals(data, result)
+    extract_variance(data, result)
 
-        extract_tardy_vals(data, result)
-        extract_variance(data, result)
+def config_exit_stats(file):
+    with open(file, 'r') as f:
+        data = f.read()
+        
+    tasks = get_tasks(data)
+
+    # Dictionary of task exit measurements by pid
+    exits = get_task_exits(data)
+    exit_dict = dict((e.id, e) for e in exits)
+
+    # Dictionary where keys are configurations, values are list
+    # of tasks with those configuratino
+    config_dict = defaultdict(lambda: [])
+    for t in tasks:
+        config_dict[t.config] += [t]
+
+    for config in config_dict:
+        task_list = sorted(config_dict[config])
+
+        # Replace tasks with corresponding exit stats
+        exit_list = [exit_dict[t.pid] for t in task_list]
+        config_dict[config] = exit_list        
+
+    return config_dict
+
+saved_stats = {}
+def get_base_stats(base_file):
+    if base_file in saved_stats:
+        return saved_stats[base_file]
+    result = config_exit_stats(base_file)
+    saved_stats[base_file] = result
+    return result
+
+def extract_scaling_data(data_file, base_file, result):
+    # Generate trees of tasks with matching configurations
+    data_stats = config_exit_stats(data_file)
+    base_stats = get_base_stats(base_file)
+
+    # Scaling factors are calculated by matching groups of tasks with the same
+    # config, then comparing task-to-task exec times in order of PID within
+    # each group
+    max_scales = []
+    avg_scales = []
+    for config in data_stats:
+        if len(data_stats[config]) != len(base_stats[config]):
+            # Quit, we are missing a record and can't guarantee
+            # a task-to-task comparison
+            continue
+        for data_stat, base_stat in zip(data_stats[config],base_stats[config]):
+            # How much larger is their exec stat than ours?
+            avg_scale = float(base_stat[Type.Avg]) / float(base_stat[Type.Avg])
+            max_scale = float(base_stat[Type.Max]) / float(base_stat[Type.Max])
+
+            avg_scales += [avg_scale]
+            max_scales += [max_scale]
+
+    result['max-scale'] = Measurement().from_array(max_scales)
+    result['avg-scale'] = Measurement().from_array(avg_scales)

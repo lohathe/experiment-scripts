@@ -218,7 +218,7 @@ def main():
     print("  Successful:\t\t%d" % succ)
     print("  Failed:\t\t%d" % failed)
     print("  Already Done:\t\t%d" % done)
-    print("  Invalid Kernel:\t\t%d" % invalid)
+    print("  Wrong Kernel:\t\t%d" % invalid)
 
 
 if __name__ == '__main__':

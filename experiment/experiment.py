@@ -161,7 +161,7 @@ class Experiment(object):
 
         self.log("Starting %d tracers" % len(self.tracers))
         map(methodcaller('start_tracing'), self.tracers)
-        time.sleep(2)
+        time.sleep(4)
 
     def teardown(self):
         sleep_time = 5

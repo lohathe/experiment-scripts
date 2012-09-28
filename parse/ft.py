@@ -41,7 +41,7 @@ def get_ft_output(data_dir, out_dir):
         return None
     return output_file
 
-def get_ft_data(data_file, result, overheads):
+def extract_ft_data(data_file, result, overheads):
     rstr = r",(?:\s+[^\s]+){3}.*?([\d\.]+).*?([\d\.]+),(?:\s+[^\s]+){3}.*?([\d\.]+)"
 
     with open(data_file) as f:

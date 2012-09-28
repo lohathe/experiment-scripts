@@ -21,8 +21,8 @@ class ColMap(object):
                 added += 1
                 key += (kv[col],)
 
-        if added != len(kv):
-            raise Exception("column map '%s' missed field in map\n%s" %
+        if added < len(kv):
+            raise Exception("column map '%s' missed field in map '%s'" %
                             (self.col_list, kv))
                
         return key
@@ -50,6 +50,10 @@ class TupleTable(object):
     def add_exp(self, kv, point):
         key = self.col_map.get_key(kv)
         self.table[key] += [point]
+
+    def get_exps(self, kv):
+        key = self.col_map.get_key(kv)
+        return self.table[key]
 
     def __reduce(self):
         if self.reduced:
