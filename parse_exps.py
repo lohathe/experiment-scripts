@@ -3,15 +3,14 @@ from __future__ import print_function
 
 import config.config as conf
 import os
-
 import parse.ft as ft
 import parse.sched as st
 
 from collections import namedtuple
 from common import load_params
 from optparse import OptionParser
-from parse.tuple_table import ColMap,TupleTable
 from parse.point import ExpPoint
+from parse.tuple_table import ColMap,TupleTable
 
 def parse_args():
     parser = OptionParser("usage: %prog [options] [data_dir]...")

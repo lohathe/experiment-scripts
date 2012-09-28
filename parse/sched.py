@@ -1,3 +1,7 @@
+"""
+TODO: make regexes indexable by name
+"""
+
 import config.config as conf
 import os
 import re

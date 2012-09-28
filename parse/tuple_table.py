@@ -66,11 +66,15 @@ class TupleTable(object):
 
             for col in self.col_map.columns():
                 val = kv[col]
-                kv.pop(col)
 
-                dir_map.add_point(col, val, kv, point)
-
-                kv[col] = val
+                try:
+                    float(val)
+                    kv.pop(col)
+                    dir_map.add_point(col, val, kv, point)
+                    kv[col] = val
+                except:
+                    # Only vary numbers. Otherwise, just have seperate lines
+                    continue
 
         dir_map.reduce()
         dir_map.write()
