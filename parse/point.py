@@ -16,7 +16,7 @@ def make_typemap():
     return copy.deepcopy(default_typemap)
 
 def dict_str(adict, sep = "\n"):
-    return sep.join(["%s: %s" % (k, str(v)) for (k,v) in adict.iteritems()])
+    return sep.join(["%s: %s" % (k, str(v)) for (k,v) in sorted(adict.iteritems())])
 
 class Measurement(object):
     def __init__(self, id = None, kv = {}):

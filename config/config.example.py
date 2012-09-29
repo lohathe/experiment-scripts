@@ -44,7 +44,7 @@ SCHED_EVENTS = range(501, 513)
 BASE_EVENTS  = ['SCHED', 'RELEASE', 'SCHED2', 'TICK', 'CXS']
 
 # Expand for mixed-crit
-# CRIT_EVENTS  = ['LVL{}_SCHED', 'LEVEL{}_RELEASE']
+# CRIT_EVENTS  = ['LVL{}_SCHED', 'LVL{}_RELEASE']
 # CRIT_LEVELS  = ['A', 'B', 'C']
 # BASE_EVENTS += [s.format(l) for (l,s) in
 #                 itertools.product(CRIT_LEVELS, CRIT_EVENTS)]

@@ -56,22 +56,18 @@ def extract_tardy_vals(data, exp_point):
     max_tards = []
 
     for t in get_tasks(data):
-        reg = r"TARDY.*?" + t.pid + "/(\d+).*?Tot.*?([\d\.]+).*?ms.*([\d\.]+).*?ms.*?([\d\.]+)"
+        reg = r"TARDY.*?" + t.pid + "/(\d+).*?Tot.*?([\d\.]+).*?ms.*?([\d\.]+).*?ms.*?([\d\.]+)"
         matches = re.findall(reg, data)
         if len(matches) != 0:
             jobs = float(matches[0][0])
 
             total_tard = float(matches[0][1])
-            print("total tard: %s" % total_tard)
             avg_tard = (total_tard / jobs) / float(t.config.period)
             max_tard = float(matches[0][2]) / float(t.config.period)
-
-            print("avg tard: %s" % avg_tard)
 
             misses = float(matches[0][3])
             if misses != 0:
                 miss_ratio = (misses / jobs)
-                print("misses is %d, jobs is %d" % (misses, jobs))
             else:
                 miss_ratio = 0
 
@@ -118,6 +114,7 @@ def config_exit_stats(file):
 
     # Dictionary of task exit measurements by pid
     exits = get_task_exits(data)
+
     exit_dict = dict((e.id, e) for e in exits)
 
     # Dictionary where keys are configurations, values are list
@@ -131,7 +128,7 @@ def config_exit_stats(file):
 
         # Replace tasks with corresponding exit stats
         exit_list = [exit_dict[t.pid] for t in task_list]
-        config_dict[config] = exit_list        
+        config_dict[config] = exit_list
 
     return config_dict
 
@@ -153,6 +150,7 @@ def extract_scaling_data(data_file, base_file, result):
     # each group
     max_scales = []
     avg_scales = []
+
     for config in data_stats:
         if len(data_stats[config]) != len(base_stats[config]):
             # Quit, we are missing a record and can't guarantee

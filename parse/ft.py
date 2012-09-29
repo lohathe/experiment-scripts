@@ -49,7 +49,7 @@ def extract_ft_data(data_file, result, overheads):
 
     for ovh in overheads:
         measure = Measurement("%s-%s" % (data_file, ovh))
-        vals = re.findall(".*{}".format(ovh) + rstr, data);
+        vals = re.findall(r"\s+{}".format(ovh.replace('_','-')) + rstr, data);
         if len(vals) != 0:
             vals = vals[0]
             measure[Type.Max] = float(vals[0])
