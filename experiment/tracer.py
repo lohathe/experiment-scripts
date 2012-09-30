@@ -27,13 +27,14 @@ class LinuxTracer(Tracer):
     def __init__(self, output_dir):
         super(LinuxTracer, self).__init__("trace-cmd", output_dir)
         
-        extra_args = ["record", "-e", "sched:sched_switch",
+        extra_args = ["record", # "-e", "sched:sched_switch",
                       "-e", "litmus:*",
                       "-o", "%s/%s" % (output_dir, conf.FILES['linux_data'])]
         stdout = open('%s/trace-cmd-stdout.txt' % self.output_dir, 'w')
         stderr = open('%s/trace-cmd-stderr.txt' % self.output_dir, 'w')
         
         execute = Executable(conf.BINS['trace-cmd'], extra_args, stdout, stderr)
+        execute.cwd = output_dir
         self.bins.append(execute)
         
     @staticmethod

@@ -27,6 +27,9 @@ class ColMap(object):
                
         return key
 
+    def __contains__(self, col):
+        return col in self.rev_map
+
     def get_map(self, tuple):
         map = {}
         for i in range(0, len(tuple)):

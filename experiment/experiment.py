@@ -91,16 +91,16 @@ class Experiment(object):
 
     def __run_tasks(self):
         exec_pause = 0.3
-        self.log("Starting the program in ({0} seconds)".format(
+        self.log("Starting the programs over ({0} seconds)".format(
             len(self.executables) * exec_pause))
         for e in self.executables:
             try:
                 e.execute()
             except:
-                raise Exception("Executable failed: %s" % e)                
+                raise Exception("Executable failed: %s" % e)
             time.sleep(exec_pause)
 
-        sleep_time = 2
+        sleep_time = len(self.executables) / litmus_util.num_cpus()
         self.log("Sleeping for %d seconds before release" % sleep_time)
         time.sleep(sleep_time)
 
@@ -117,13 +117,18 @@ class Experiment(object):
         if released != len(self.executables):
             # Some tasks failed to release, kill all tasks and fail
             # Need to re-release non-released tasks before we can kill them though
-            self.log("Failed to release %d tasks! Re-releasing and killing".format(
-                len(self.experiments) - released))
+            self.log("Failed to release {} tasks! Re-releasing and killing".format(
+                len(self.executables) - released, len(self.executables)))
 
-            time.sleep(10)
-            litmus_util.release_tasks()
+            time.sleep(5)
 
-            time.sleep(20)
+            released = litmus_util.release_tasks()
+
+            self.log("Re-released %d tasks" % released)
+
+            time.sleep(5)
+
+            self.log("Killing all tasks")
             map(methodcaller('kill'), self.executables)
 
             ret = False
@@ -147,23 +152,46 @@ class Experiment(object):
 
     def run_exp(self):
         self.setup()
+
+        succ = False
+        
         try:
             self.__run_tasks()
+            self.log("Saving results in %s" % self.finished_dir)
+            succ = True
         finally:
             self.teardown()
 
-    def setup(self):
-        self.log("Switching to %s" % self.scheduler)
-        litmus_util.switch_scheduler(self.scheduler)
+        if succ:
+            self.__save_results()
+            self.log("Experiment done!")
 
+
+    def setup(self):        
         self.log("Writing %d proc entries" % len(self.proc_entries))
         map(methodcaller('write_proc'), self.proc_entries)
 
+        time.sleep(5)
+
+        self.log("Switching to %s" % self.scheduler)
+        litmus_util.switch_scheduler(self.scheduler)
+
         self.log("Starting %d tracers" % len(self.tracers))
         map(methodcaller('start_tracing'), self.tracers)
+
+        self.exec_out = open('%s/exec-out.txt' % self.working_dir, 'w')
+        self.exec_err = open('%s/exec-err.txt' % self.working_dir, 'w')
+        def set_out(executable):
+            executable.stdout_file = self.exec_out
+            executable.stderr_file = self.exec_err
+        map(set_out, self.executables)
+        
         time.sleep(4)
 
     def teardown(self):
+        self.exec_out.close()
+        self.exec_err.close()
+        
         sleep_time = 5
         self.log("Sleeping %d seconds to allow buffer flushing" % sleep_time)
         time.sleep(sleep_time)
@@ -174,6 +202,3 @@ class Experiment(object):
         self.log("Switching to Linux scheduler")
         litmus_util.switch_scheduler("Linux")
 
-        self.log("Saving results in %s" % self.finished_dir)
-        self.__save_results()
-        self.log("Experiment done!")

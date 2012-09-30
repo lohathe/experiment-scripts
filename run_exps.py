@@ -38,13 +38,13 @@ def parse_args():
 def convert_data(data):
     """Convert a non-python schedule file into the python format"""
     regex = re.compile(
-
-    r"(?P<PROC>^"
-          r"(?P<HEADER>/proc/\w+?/)?"
-          r"(?P<ENTRY>[\w\/]+)"
-          r"\s*{\s*(?P<CONTENT>.*?)\s*?}$)|"
-        r"(?P<SPIN>^(?P<TYPE>\w+?spin)?\s*?"
-          r"(?P<ARGS>\w[\s\w]*?)?\s*?$)",
+        r"(?P<PROC>^"
+            r"(?P<HEADER>/proc/\w+?/)?"
+            r"(?P<ENTRY>[\w\/]+)"
+              r"\s*{\s*(?P<CONTENT>.*?)\s*?}$)|"
+        r"(?P<SPIN>^"
+            r"(?P<TYPE>\w+?spin)?\s+"
+            r"(?P<ARGS>[\w\-_\d\. ]+)\s*$)",
         re.S|re.I|re.M)
 
     procs = []
@@ -63,6 +63,15 @@ def convert_data(data):
 
     return {'proc' : procs, 'spin' : spins}
 
+def fix_paths(schedule, exp_dir):
+    for (idx, (spin, args)) in enumerate(schedule['spin']):
+        # Replace relative paths (if present) with absolute ones
+        for arg in args.split(" "):
+            abspath = "%s/%s" % (exp_dir, arg)
+            if os.path.exists(abspath):
+                args = args.replace(arg, abspath)
+
+        schedule['spin'][idx] = (spin, args)
 
 def get_dirs(sched_file, out_base_dir):
     sched_leaf_dir  = re.findall(r".*/([\w_-]+)/.*?$", sched_file)[0]
@@ -88,27 +97,27 @@ def load_experiment(sched_file, scheduler, duration, param_file, out_base):
     params = {}
     kernel = ""
     
-    if not scheduler or not duration:
-        param_file = param_file or \
-          "%s/%s" % (dirname, conf.DEFAULTS['params_file'])
+    param_file = param_file or \
+      "%s/%s" % (dirname, conf.DEFAULTS['params_file'])
 
-        if os.path.isfile(param_file):
-            params = load_params(param_file)
-            scheduler = scheduler or params[conf.PARAMS['sched']]
-            duration  = duration  or params[conf.PARAMS['dur']]
+    if os.path.isfile(param_file):
+        params = load_params(param_file)
+        scheduler = scheduler or params[conf.PARAMS['sched']]
+        duration  = duration  or params[conf.PARAMS['dur']]
 
-            # Experiments can specify required kernel name
-            if conf.PARAMS['kernel'] in params:
-                kernel = params[conf.PARAMS['kernel']]
+        # Experiments can specify required kernel name
+        if conf.PARAMS['kernel'] in params:
+            kernel = params[conf.PARAMS['kernel']]
 
-        duration = duration or conf.DEFAULTS['duration']
+    duration = duration or conf.DEFAULTS['duration']
 
-        if not scheduler:
-            raise IOError("Parameter scheduler not specified in %s" % (param_file))
+    if not scheduler:
+        raise IOError("Parameter scheduler not specified in %s" % (param_file))
 
     # Parse schedule file's intentions
     schedule = load_schedule(sched_file)
     (work_dir, out_dir) = get_dirs(sched_file, out_base)
+    fix_paths(schedule, os.path.split(sched_file)[0])
 
     run_exp(sched_file, schedule, scheduler, kernel, duration, work_dir, out_dir)
 
@@ -170,8 +179,9 @@ def run_exp(name, schedule, scheduler, kernel, duration, work_dir, out_dir):
 
     exp = Experiment(name, scheduler, work_dir, out_dir,
                      proc_entries, executables)
-    exp.run_exp()
 
+    exp.run_exp()
+    
 
 def main():
     opts, args = parse_args()

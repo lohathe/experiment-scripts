@@ -90,6 +90,10 @@ def main():
 
     (plain_exps, scaling_bases) = gen_exp_data(args, base_conf, col_map)
 
+    if base_conf and base_conf.keys()[0] not in col_map:
+        raise IOError("Base column '%s' not present in any parameters!" %
+                      base_conf.keys()[0])
+
     base_table   = TupleTable(col_map)
     result_table = TupleTable(col_map)
 
@@ -105,6 +109,7 @@ def main():
             ft.extract_ft_data(exp.data_files.ft, result, conf.BASE_EVENTS)
 
         if exp.data_files.st:
+            base = None
             if base_conf:
                 # Try to find a scaling base
                 base_params = copy.deepcopy(exp.params)

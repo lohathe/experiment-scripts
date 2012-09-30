@@ -1,6 +1,5 @@
 """
-TODO: make regexes indexable by name
-
+TODO: No longer very pythonic, lot of duplicate code
 """
 
 import config.config as conf
@@ -12,7 +11,27 @@ import subprocess
 from collections import namedtuple,defaultdict
 from point import Measurement,Type
 
-TaskConfig = namedtuple('TaskConfig', ['cpu','wcet','period'])
+PARAM_RECORD = r"(?P<RECORD>" +\
+  r"PARAM *?(?P<PID>\d+)\/.*?" +\
+  r"cost:\s+(?P<WCET>[\d\.]+)ms.*?" +\
+  r"period.*?(?P<PERIOD>[\d.]+)ms.*?" +\
+  r"part.*?(?P<CPU>\d+)[, ]*" +\
+  r"(?:class=(?P<CLASS>\w+))?[, ]*" +\
+  r"(?:level=(?P<LEVEL>\w+))?).*$"
+EXIT_RECORD = r"(?P<RECORD>" +\
+  r"TASK_EXIT *?(?P<PID>\d+)/.*?" +\
+  r"Avg.*?(?P<AVG>\d+).*?" +\
+  r"Max.*?(?P<MAX>\d+))"
+TARDY_RECORD = r"(?P<RECORD>" +\
+  r"TARDY.*?(?P<PID>\d+)/(?P<JOB>\d+).*?" +\
+  r"Tot.*?(?P<TOTAL>[\d\.]+).*?ms.*?" +\
+  r"(?P<MAX>[\d\.]+).*?ms.*?" +\
+  r"(?P<MISSES>[\d\.]+))"
+COMPLETION_RECORD = r"(?P<RECORD>" +\
+  r"COMPLETION.*?(?P<PID>\d+)/.*?" +\
+  r"(?P<EXEC>[\d\.]+)ms)"
+
+TaskConfig = namedtuple('TaskConfig', ['cpu','wcet','period','type','level'])
 Task = namedtuple('Task', ['pid', 'config'])
 
 def get_st_output(data_dir, out_dir):
@@ -34,18 +53,43 @@ def get_st_output(data_dir, out_dir):
     return output_file
 
 def get_tasks(data):
-    reg = r"PARAM *?(\d+)\/.*?cost:\s+([\d\.]+)ms.*?period.*?([\d.]+)ms.*?part.*?(\d+)"
     ret = []
-    for match in re.findall(reg, data):
-        t = Task(match[0], TaskConfig(match[3],match[1],match[2]))
-        ret += [t]
+    for match in re.finditer(PARAM_RECORD, data, re.M):
+        try:
+            t = Task( int(match.group('PID')),
+                      TaskConfig( int(match.group('CPU')),
+                                  float(match.group('WCET')),
+                                  float(match.group('PERIOD')),
+                                  match.group("CLASS"),
+                                  match.group("LEVEL")))
+            if not (t.config.period and t.pid):
+                raise Exception()
+            ret += [t]
+        except Exception as e:
+            raise Exception("Invalid task record: %s\nparsed:\n\t%s\n\t%s" %
+                            (e, match.groupdict(), match.group('RECORD')))
     return ret
 
+def get_tasks_dict(data):
+    tasks_list = get_tasks(data)
+    tasks_dict = {}
+    for t in tasks_list:
+        tasks_dict[t.pid] = t
+    return tasks_dict
+
 def get_task_exits(data):
-    reg = r"TASK_EXIT *?(\d+)/.*?Avg.*?(\d+).*?Max.*?(\d+)"
     ret = []
-    for match in re.findall(reg, data):
-        m = Measurement(match[0], {Type.Max : match[2], Type.Avg : match[1]})
+    for match in re.finditer(EXIT_RECORD, data):
+        try:
+            m = Measurement( int(match.group('PID')),
+                             {Type.Max : float(match.group('MAX')),
+                              Type.Avg : float(match.group('AVG'))})
+            for (type, value) in m:
+                if not value: raise Exception()
+        except:
+                raise Exception("Invalid exit record, parsed:\n\t%s\n\t%s" %
+                                (match.groupdict(), m.group('RECORD')))
+        
         ret += [m]
     return ret
         
@@ -55,40 +99,51 @@ def extract_tardy_vals(data, exp_point):
     avg_tards = []
     max_tards = []
 
-    for t in get_tasks(data):
-        reg = r"TARDY.*?" + t.pid + "/(\d+).*?Tot.*?([\d\.]+).*?ms.*?([\d\.]+).*?ms.*?([\d\.]+)"
-        matches = re.findall(reg, data)
-        if len(matches) != 0:
-            jobs = float(matches[0][0])
+    tasks = get_tasks_dict(data)
 
-            total_tard = float(matches[0][1])
-            avg_tard = (total_tard / jobs) / float(t.config.period)
-            max_tard = float(matches[0][2]) / float(t.config.period)
+    for match in re.finditer(TARDY_RECORD, data):
+        try:
+            pid  = int(match.group("PID"))
+            jobs = int(match.group("JOB"))
+            misses = int(match.group("MISSES"))
+            total_tard = float(match.group("TOTAL"))
+            max_tard   = float(match.group("MAX"))
 
-            misses = float(matches[0][3])
-            if misses != 0:
-                miss_ratio = (misses / jobs)
-            else:
-                miss_ratio = 0
+            if not (jobs and pid): raise Exception()
+        except:
+            raise Exception("Invalid tardy record:\n\t%s\n\t%s" %
+                            (match.groupdict(), match.group("RECORD")))
 
-            ratios    += [miss_ratio]
-            avg_tards += [avg_tard]
-            max_tards += [max_tard]
+        if pid not in tasks:
+            raise Exception("Invalid pid '%d' in tardy record:\n\t%s" %
+                            match.group("RECORD"))
+        
+        t = tasks[pid]
+        avg_tards  += [ total_tard / (jobs * t.config.period) ]
+        max_tards  += [ max_tard / t.config.period ]
+        ratios     += [ misses / jobs ]
 
     exp_point["avg-rel-tard"] = Measurement().from_array(avg_tards)
     exp_point["max-rel-tard"] = Measurement().from_array(max_tards)
-    exp_point["miss-ratio"] = Measurement().from_array(ratios)
+    exp_point["miss-ratio"]   = Measurement().from_array(ratios)
 
 def extract_variance(data, exp_point):
     varz = []
-    for t in get_tasks(data):
-        reg = r"COMPLETION.*?" + t.pid + r".*?([\d\.]+)ms"
-        matches = re.findall(reg, data)
+    completions = defaultdict(lambda: [])
 
-        if len(matches) == 0:
-            return 0
+    for match in re.finditer(COMPLETION_RECORD, data):
+        try:
+            pid = int(match.group("PID"))
+            duration = float(match.group("EXEC"))
 
-        job_times = np.array(filter(lambda x: float(x) != 0, matches), dtype=np.float)
+            if not (duration and pid): raise Exception()
+        except:
+            raise Exception("Invalid completion record:\n\t%s\n\t%s" %
+                            (match.groupdict(), match.group("RECORD")))
+        completions[pid] += [duration]
+
+    for (pid, durations) in completions:
+        job_times = np.array(durations)
 
         # Coefficient of variation
         cv = job_times.std() / job_times.mean()
@@ -127,6 +182,10 @@ def config_exit_stats(file):
         task_list = sorted(config_dict[config])
 
         # Replace tasks with corresponding exit stats
+        if not t.pid in exit_dict:
+            raise Exception("Missing exit record for task '%s' in '%s'" %
+                            (t, file))
+        
         exit_list = [exit_dict[t.pid] for t in task_list]
         config_dict[config] = exit_list
 
