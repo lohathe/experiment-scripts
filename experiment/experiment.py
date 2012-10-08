@@ -40,6 +40,8 @@ class Experiment(object):
         self.finished_dir = finished_dir
         self.proc_entries = proc_entries
         self.executables  = executables
+        self.exec_out = None
+        self.exec_err = None
 
         self.__make_dirs()
         self.__assign_executable_cwds()
@@ -151,23 +153,26 @@ class Experiment(object):
         print "[Exp %s]: %s" % (self.name, msg)
 
     def run_exp(self):
-        self.setup()
-
         succ = False
-        
         try:
-            self.__run_tasks()
-            self.log("Saving results in %s" % self.finished_dir)
-            succ = True
+            self.setup()
+
+            try:
+                self.__run_tasks()
+                self.log("Saving results in %s" % self.finished_dir)
+                succ = True
+            finally:
+                self.teardown()
         finally:
-            self.teardown()
+            self.log("Switching to Linux scheduler")
+            litmus_util.switch_scheduler("Linux")
 
         if succ:
             self.__save_results()
             self.log("Experiment done!")
 
 
-    def setup(self):        
+    def setup(self):
         self.log("Writing %d proc entries" % len(self.proc_entries))
         map(methodcaller('write_proc'), self.proc_entries)
 
@@ -185,20 +190,17 @@ class Experiment(object):
             executable.stdout_file = self.exec_out
             executable.stderr_file = self.exec_err
         map(set_out, self.executables)
-        
+
         time.sleep(4)
 
     def teardown(self):
-        self.exec_out.close()
-        self.exec_err.close()
-        
+        self.exec_out and self.exec_out.close()
+        self.exec_err and self.exec_err.close()
+
         sleep_time = 5
         self.log("Sleeping %d seconds to allow buffer flushing" % sleep_time)
         time.sleep(sleep_time)
 
         self.log("Stopping tracers")
         map(methodcaller('stop_tracing'), self.tracers)
-
-        self.log("Switching to Linux scheduler")
-        litmus_util.switch_scheduler("Linux")
 

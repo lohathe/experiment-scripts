@@ -13,7 +13,7 @@ class ColMap(object):
     def get_key(self, kv):
         key = ()
         added = 0
-        
+
         for col in self.col_list:
             if col not in kv:
                 key += (None,)
@@ -24,7 +24,7 @@ class ColMap(object):
         if added < len(kv):
             raise Exception("column map '%s' missed field in map '%s'" %
                             (self.col_list, kv))
-               
+        
         return key
 
     def __contains__(self, col):
@@ -43,7 +43,7 @@ class ColMap(object):
 
     def __str__(self):
         return "<ColMap>%s" % (self.rev_map)
-    
+
 class TupleTable(object):
     def __init__(self, col_map):
         self.col_map = col_map
@@ -63,7 +63,7 @@ class TupleTable(object):
             raise Exception("cannot reduce twice!")
         self.reduced = True
         for key, values in self.table.iteritems():
-            self.table[key] = SummaryPoint(key, values)
+            self.table[key] = SummaryPoint(str(key), values)
 
     def write_result(self, out_dir):
         dir_map = DirMap(out_dir)

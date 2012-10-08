@@ -42,18 +42,18 @@ def get_exp_params(data_dir, col_map):
     # Track all changed params
     for key in params.keys():
         col_map.try_add(key)
-        
+
     return params
 
 
 def gen_exp_data(exp_dirs, base_conf, col_map):
     plain_exps = []
     scaling_bases  = []
-    
+
     for data_dir in exp_dirs:
         if not os.path.isdir(data_dir):
             raise IOError("Invalid experiment '%s'" % os.path.abspath(data_dir))
-        
+
         tmp_dir = data_dir + "/tmp"
         if not os.path.exists(tmp_dir):
             os.mkdir(tmp_dir)
@@ -85,7 +85,7 @@ def main():
     # Configuration key for task systems used to calculate task
     # execution scaling factors
     base_conf = dict(re.findall("(.*)=(.*)", opts.scale_against))
-    
+
     col_map = ColMap()
 
     (plain_exps, scaling_bases) = gen_exp_data(args, base_conf, col_map)
@@ -103,7 +103,7 @@ def main():
 
     for exp in plain_exps:
         result = ExpPoint(exp.name)
-        
+
         if exp.data_files.ft:
             # Write overheads into result
             ft.extract_ft_data(exp.data_files.ft, result, conf.BASE_EVENTS)
@@ -115,13 +115,9 @@ def main():
                 base_params = copy.deepcopy(exp.params)
                 base_params.pop(base_conf.keys()[0])
                 base = base_table.get_exps(base_params)[0]
-            if base:
-                # Write scaling factor (vs base) into result
-                st.extract_scaling_data(exp.data_files.st,
-                                        base.data_files.st,
-                                        result)
             # Write deadline misses / tardiness into result
-            st.extract_sched_data(exp.data_files.st, result)
+            st.extract_sched_data(exp.data_files.st, result,
+                                  base.data_files.st if base else None)
 
         result_table.add_exp(exp.params, result)
 
@@ -129,6 +125,6 @@ def main():
 
 
     result_table.write_result(opts.out_dir)
-    
+
 if __name__ == '__main__':
     main()

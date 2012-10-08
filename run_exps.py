@@ -1,5 +1,9 @@
 #!/usr/bin/env python
 from __future__ import print_function
+"""
+TODO: no -f flag, instead allow individual schedules to be passed in.
+      -f flag now forced, which removes old data directories
+"""
 
 import config.config as conf
 import experiment.litmus_util as lu
@@ -39,11 +43,11 @@ def convert_data(data):
     """Convert a non-python schedule file into the python format"""
     regex = re.compile(
         r"(?P<PROC>^"
-            r"(?P<HEADER>/proc/\w+?/)?"
-            r"(?P<ENTRY>[\w\/]+)"
+            r"(?P<HEADER>/proc/[\w\-]+?/)?"
+            r"(?P<ENTRY>[\w\-\/]+)"
               r"\s*{\s*(?P<CONTENT>.*?)\s*?}$)|"
         r"(?P<SPIN>^"
-            r"(?P<TYPE>\w+?spin)?\s+"
+            r"(?P<TYPE>\w+?spin)?\s*"
             r"(?P<ARGS>[\w\-_\d\. ]+)\s*$)",
         re.S|re.I|re.M)
 
@@ -70,6 +74,7 @@ def fix_paths(schedule, exp_dir):
             abspath = "%s/%s" % (exp_dir, arg)
             if os.path.exists(abspath):
                 args = args.replace(arg, abspath)
+                break
 
         schedule['spin'][idx] = (spin, args)
 
@@ -96,7 +101,7 @@ def load_experiment(sched_file, scheduler, duration, param_file, out_base):
 
     params = {}
     kernel = ""
-    
+
     param_file = param_file or \
       "%s/%s" % (dirname, conf.DEFAULTS['params_file'])
 
@@ -181,7 +186,6 @@ def run_exp(name, schedule, scheduler, kernel, duration, work_dir, out_dir):
                      proc_entries, executables)
 
     exp.run_exp()
-    
 
 def main():
     opts, args = parse_args()
@@ -193,14 +197,16 @@ def main():
 
     args = args or [opts.sched_file]
 
+    created = False
     if not os.path.exists(out_base):
+        created = True
         os.mkdir(out_base)
 
     done = 0
     succ = 0
     failed = 0
     invalid = 0
-    
+
     for exp in args:
         path = "%s/%s" % (os.getcwd(), exp)
 
@@ -223,7 +229,9 @@ def main():
             traceback.print_exc()
             failed += 1
 
-        
+    if not os.listdir(out_base) and created and not succ:
+        os.rmdir(out_base)
+
     print("Experiments run:\t%d" % len(args))
     print("  Successful:\t\t%d" % succ)
     print("  Failed:\t\t%d" % failed)

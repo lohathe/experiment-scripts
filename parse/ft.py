@@ -12,7 +12,7 @@ def get_ft_output(data_dir, out_dir):
 
     FT_DATA_NAME = "scheduler=x-ft"
     output_file  = "{}/out-ft".format(out_dir)
-    
+
     if os.path.isfile(output_file):
         print("ft-output already exists for %s" % data_dir)
         return output_file
