@@ -50,7 +50,7 @@ class LeveledArray(object):
             name = "%s%s" % ("%s-" % level if level else "", self.name)
             result[name] = Measurement(name).from_array(arr)
 
-def get_st_output(data_dir, out_dir):
+def get_st_output(data_dir, out_dir, force=False):
     """
     Create and return files containing unpacked sched data
     """
@@ -60,7 +60,11 @@ def get_st_output(data_dir, out_dir):
     output_file = "%s/out-st" % out_dir
 
     if os.path.isfile(output_file):
-        return output_file
+        if force:
+            os.remove(output_file)
+        else:
+            print("st-output already exists for %s" % data_dir)
+            return output_file
 
     if len(bins) != 0:
         cmd_arr = [conf.BINS['st_show']]

@@ -1,14 +1,11 @@
 #!/usr/bin/env python
 from __future__ import print_function
-"""
-TODO: no -f flag, instead allow individual schedules to be passed in.
-      -f flag now forced, which removes old data directories
-"""
 
 import config.config as conf
 import experiment.litmus_util as lu
 import os
 import re
+import shutil
 import traceback
 
 from common import load_params
@@ -22,19 +19,21 @@ def InvalidKernel(Exception):
         self.kernel = kernel
 
 def parse_args():
-    parser = OptionParser("usage: %prog [options] [sched_file]... [exp_dir]...]")
+    parser = OptionParser("usage: %prog [options] [sched_file]... [exp_dir]...")
 
     parser.add_option('-s', '--scheduler', dest='scheduler',
                       help='scheduler for all experiments')
     parser.add_option('-d', '--duration', dest='duration', type='int',
                       help='duration (seconds) of tasks')
     parser.add_option('-o', '--out-dir', dest='out_dir',
-                      help='directory for data output', default=os.getcwd())
+                      help='directory for data output', default="run-data")
     parser.add_option('-p', '--params', dest='param_file',
                       help='file with experiment parameters')
-    parser.add_option('-f', '--schedule-file', dest='sched_file',
-                      help='name of schedule files',
+    parser.add_option('-c', '--schedule-file', dest='sched_file',
+                      help='name of schedule files within directories',
                       default=conf.DEFAULTS['sched_file'])
+    parser.add_option('-f', '--force', action='store_true', default=False,
+                      dest='force', help='overwrite existing data')
 
     return parser.parse_args()
 
@@ -67,33 +66,21 @@ def convert_data(data):
 
     return {'proc' : procs, 'spin' : spins}
 
-def fix_paths(schedule, exp_dir):
+def fix_paths(schedule, exp_dir, sched_file):
     for (idx, (spin, args)) in enumerate(schedule['spin']):
         # Replace relative paths (if present) with absolute ones
-        for arg in args.split(" "):
+        for arg in re.split(" +", args):
             abspath = "%s/%s" % (exp_dir, arg)
             if os.path.exists(abspath):
                 args = args.replace(arg, abspath)
                 break
+            elif re.match(r'.*\w+\.\w+', arg):
+                print("WARNING: non-existent file '%s' may be referenced:\n\t%s"
+                      % (arg, sched_file))
 
         schedule['spin'][idx] = (spin, args)
 
-def get_dirs(sched_file, out_base_dir):
-    sched_leaf_dir  = re.findall(r".*/([\w_-]+)/.*?$", sched_file)[0]
-    sched_full_dir = os.path.split(sched_file)[0]
-
-    work_dir = "%s/tmp" % sched_full_dir
-
-    if sched_full_dir == out_base_dir:
-        out_dir = "%s/data" % sched_full_dir
-    else:
-        # Put it under the base output dir with the same directory name
-        out_dir  = "%s/%s" % (out_base_dir, sched_leaf_dir)
-
-    return (work_dir, out_dir)
-
-
-def load_experiment(sched_file, scheduler, duration, param_file, out_base):
+def load_experiment(sched_file, scheduler, duration, param_file, out_dir):
     if not os.path.isfile(sched_file):
         raise IOError("Cannot find schedule file: %s" % sched_file)
 
@@ -121,8 +108,8 @@ def load_experiment(sched_file, scheduler, duration, param_file, out_base):
 
     # Parse schedule file's intentions
     schedule = load_schedule(sched_file)
-    (work_dir, out_dir) = get_dirs(sched_file, out_base)
-    fix_paths(schedule, os.path.split(sched_file)[0])
+    work_dir = "%s/tmp" % dirname
+    fix_paths(schedule, os.path.split(sched_file)[0], sched_file)
 
     run_exp(sched_file, schedule, scheduler, kernel, duration, work_dir, out_dir)
 
@@ -209,15 +196,19 @@ def main():
 
     for exp in args:
         path = "%s/%s" % (os.getcwd(), exp)
+        out_dir = "%s/%s" % (out_base, exp)
 
         if not os.path.exists(path):
             raise IOError("Invalid experiment: %s" % path)
+
+        if opts.force and os.path.exists(out_dir):
+            shutil.rmtree(out_dir)
 
         if os.path.isdir(exp):
             path = "%s/%s" % (path, opts.sched_file)
 
         try:
-            load_experiment(path, scheduler, duration, param_file, out_base)
+            load_experiment(path, scheduler, duration, param_file, out_dir)
             succ += 1
         except ExperimentDone:
             done += 1

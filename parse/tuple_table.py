@@ -24,7 +24,7 @@ class ColMap(object):
         if added < len(kv):
             raise Exception("column map '%s' missed field in map '%s'" %
                             (self.col_list, kv))
-        
+
         return key
 
     def __contains__(self, col):
@@ -58,7 +58,7 @@ class TupleTable(object):
         key = self.col_map.get_key(kv)
         return self.table[key]
 
-    def __reduce(self):
+    def reduce(self):
         if self.reduced:
             raise Exception("cannot reduce twice!")
         self.reduced = True
@@ -67,7 +67,6 @@ class TupleTable(object):
 
     def write_result(self, out_dir):
         dir_map = DirMap(out_dir)
-        self.__reduce()
         for key, point in self.table.iteritems():
             kv = self.col_map.get_map(key)
 

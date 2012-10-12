@@ -6,7 +6,10 @@ import subprocess
 
 from point import Measurement,Type
 
-def get_ft_output(data_dir, out_dir):
+def get_ft_output(data_dir, out_dir, force=False):
+    """
+    Create and return files containing sorted and analyzed overhead data
+    """
     bin_file = conf.FILES['ft_data'] + "$"
     bins = [f for f in os.listdir(data_dir) if re.match(bin_file, f)]
 
@@ -14,8 +17,11 @@ def get_ft_output(data_dir, out_dir):
     output_file  = "{}/out-ft".format(out_dir)
 
     if os.path.isfile(output_file):
-        print("ft-output already exists for %s" % data_dir)
-        return output_file
+        if force:
+            os.remove(output_file)
+        else:
+            print("ft-output already exists for %s" % data_dir)
+            return output_file
 
     if len(bins) != 0:
         err_file = open("%s/err-ft" % out_dir, 'w')

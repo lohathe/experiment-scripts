@@ -197,7 +197,7 @@ class Experiment(object):
         self.exec_out and self.exec_out.close()
         self.exec_err and self.exec_err.close()
 
-        sleep_time = 5
+        sleep_time = 10
         self.log("Sleeping %d seconds to allow buffer flushing" % sleep_time)
         time.sleep(sleep_time)
 

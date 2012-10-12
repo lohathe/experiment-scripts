@@ -7,6 +7,7 @@ import os
 import parse.ft as ft
 import parse.sched as st
 import re
+import shutil as sh
 
 from collections import namedtuple
 from common import load_params
@@ -18,10 +19,16 @@ def parse_args():
     parser = OptionParser("usage: %prog [options] [data_dir]...")
 
     parser.add_option('-o', '--out-dir', dest='out_dir',
-                      help='directory for data output', default=os.getcwd())
+                      help='directory for data output', default='parse-data')
+    parser.add_option('-c', '--clean', action='store_true', default=False,
+                      dest='clean', help='do not output single-point csvs')
     parser.add_option('-s', '--scale-against', dest='scale_against',
                       metavar='PARAM=VALUE', default="",
                       help='calculate task scaling factors against these configs')
+    parser.add_option('-f', '--force', action='store_true', default=False,
+                      dest='force', help='overwrite existing data')
+    parser.add_option('-v', '--verbose', action='store_true', default=False,
+                      dest='verbose', help='print out data points')
 
     return parser.parse_args()
 
@@ -46,7 +53,7 @@ def get_exp_params(data_dir, col_map):
     return params
 
 
-def gen_exp_data(exp_dirs, base_conf, col_map):
+def gen_exp_data(exp_dirs, base_conf, col_map, force):
     plain_exps = []
     scaling_bases  = []
 
@@ -60,8 +67,8 @@ def gen_exp_data(exp_dirs, base_conf, col_map):
 
         # Read and translate exp output files
         params = get_exp_params(data_dir, col_map)
-        st_output = st.get_st_output(data_dir, tmp_dir)
-        ft_output = ft.get_ft_output(data_dir, tmp_dir)
+        st_output = st.get_st_output(data_dir, tmp_dir, force)
+        ft_output = ft.get_ft_output(data_dir, tmp_dir, force)
 
         # Create experiment named after the data dir
         exp_data = ExpData(data_dir, params, DataFiles(ft_output, st_output))
@@ -88,7 +95,7 @@ def main():
 
     col_map = ColMap()
 
-    (plain_exps, scaling_bases) = gen_exp_data(args, base_conf, col_map)
+    (plain_exps, scaling_bases) = gen_exp_data(args, base_conf, col_map, opts.force)
 
     if base_conf and base_conf.keys()[0] not in col_map:
         raise IOError("Base column '%s' not present in any parameters!" %
@@ -121,8 +128,15 @@ def main():
 
         result_table.add_exp(exp.params, result)
 
-        print(result)
+        if opts.verbose:
+            print(result)
 
+    if opts.force and os.path.exists(opts.out_dir):
+        sh.rmtree(opts.out_dir)
+
+    # Remove un-plottable values
+    if opts.clean:
+        result_table.reduce()
 
     result_table.write_result(opts.out_dir)
 
