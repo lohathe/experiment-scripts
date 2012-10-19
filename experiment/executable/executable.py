@@ -72,3 +72,6 @@ class Executable(object):
         self.sp.wait()
         if self.sp.returncode != 0:
             print >>sys.stderr, "Non-zero return: %s %s" % (self.exec_file, " ".join(self.extra_args))
+            return 0
+        else:
+            return 1

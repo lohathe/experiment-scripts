@@ -136,7 +136,9 @@ class Experiment(object):
             ret = False
 
         self.log("Waiting for program to finish...")
-        map(methodcaller('wait'), self.executables)
+        for e in self.executables:
+            if not e.wait():
+                ret = False
 
         # And it must be stopped here for the same reason
         if self.overhead_trace:

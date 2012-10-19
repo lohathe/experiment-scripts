@@ -26,7 +26,7 @@ def parse_args():
     parser.add_option('-d', '--duration', dest='duration', type='int',
                       help='duration (seconds) of tasks')
     parser.add_option('-o', '--out-dir', dest='out_dir',
-                      help='directory for data output', default="run-data")
+                      help='directory for data output', default=("%s/run-data"%os.getcwd()))
     parser.add_option('-p', '--params', dest='param_file',
                       help='file with experiment parameters')
     parser.add_option('-c', '--schedule-file', dest='sched_file',
@@ -47,7 +47,7 @@ def convert_data(data):
               r"\s*{\s*(?P<CONTENT>.*?)\s*?}$)|"
         r"(?P<SPIN>^"
             r"(?P<TYPE>\w+?spin)?\s*"
-            r"(?P<ARGS>[\w\-_\d\. ]+)\s*$)",
+            r"(?P<ARGS>[\w\-_\d\. \=]+)\s*$)",
         re.S|re.I|re.M)
 
     procs = []
@@ -134,8 +134,8 @@ def run_exp(name, schedule, scheduler, kernel, duration, work_dir, out_dir):
     proc_entries = []
     executables  = []
 
-    if kernel and not lu.uname_matches(kernel):
-        raise InvalidKernel(kernel)
+    # if kernel and not lu.uname_matches(kernel):
+    #     raise InvalidKernel(kernel)
 
     # Parse values for proc entries
     for entry_conf in schedule['proc']:
@@ -196,7 +196,7 @@ def main():
 
     for exp in args:
         path = "%s/%s" % (os.getcwd(), exp)
-        out_dir = "%s/%s" % (out_base, exp)
+        out_dir = "%s/%s" % (out_base, os.path.split(exp.strip('/'))[1])
 
         if not os.path.exists(path):
             raise IOError("Invalid experiment: %s" % path)
