@@ -13,7 +13,7 @@ from point import Measurement,Type
 
 PARAM_RECORD = r"(?P<RECORD>" +\
   r"PARAM *?(?P<PID>\d+)\/.*?" +\
-  r"cost:\s+(?P<WCET>[\d\.]+)ms.*?" +\
+  r"cost.*?(?P<WCET>[\d\.]+)ms.*?" +\
   r"period.*?(?P<PERIOD>[\d.]+)ms.*?" +\
   r"part.*?(?P<CPU>\d+)[, ]*" +\
   r"(?:class=(?P<CLASS>\w+))?[, ]*" +\
@@ -23,13 +23,15 @@ EXIT_RECORD = r"(?P<RECORD>" +\
   r"Avg.*?(?P<AVG>\d+).*?" +\
   r"Max.*?(?P<MAX>\d+))"
 TARDY_RECORD = r"(?P<RECORD>" +\
-  r"TARDY.*?(?P<PID>\d+)/(?P<JOB>\d+).*?" +\
+  r"TASK_TARDY.*?(?P<PID>\d+)/(?P<JOB>\d+).*?" +\
   r"Tot.*?(?P<TOTAL>[\d\.]+).*?ms.*?" +\
   r"(?P<MAX>[\d\.]+).*?ms.*?" +\
   r"(?P<MISSES>[\d\.]+))"
 COMPLETION_RECORD = r"(?P<RECORD>" +\
   r"COMPLETION.*?(?P<PID>\d+)/.*?" +\
-  r"(?P<EXEC>[\d\.]+)ms)"
+  r"exec.*?(?P<EXEC>[\d\.]+)ms.*?"    +\
+  r"flush.*?(?P<FLUSH>[\d\.]+)ms.*?"  +\
+  r"load.*?(?P<LOAD>[\d\.]+)ms)"
 
 TaskConfig = namedtuple('TaskConfig', ['cpu','wcet','period','type','level'])
 Task = namedtuple('Task', ['pid', 'config'])
@@ -107,11 +109,9 @@ def get_task_exits(data):
             m = Measurement( int(match.group('PID')),
                              {Type.Max : float(match.group('MAX')),
                               Type.Avg : float(match.group('AVG'))})
-            for (type, value) in m:
-                if not value: raise Exception()
         except:
                 raise Exception("Invalid exit record, parsed:\n\t%s\n\t%s" %
-                                (match.groupdict(), m.group('RECORD')))
+                                (match.groupdict(), match.group('RECORD')))
 
         ret += [m]
     return ret
@@ -137,7 +137,7 @@ def extract_tardy_vals(task_dict, data, exp_point):
 
         if pid not in task_dict:
             raise Exception("Invalid pid '%d' in tardy record:\n\t%s" %
-                            match.group("RECORD"))
+                            (pid, match.group("RECORD")))
 
         t = task_dict[pid]
         avg_tards.add(t, total_tard / (jobs * t.config.period))
@@ -148,8 +148,12 @@ def extract_tardy_vals(task_dict, data, exp_point):
     avg_tards.write_measurements(exp_point)
     max_tards.write_measurements(exp_point)
 
+# TODO: rename
 def extract_variance(task_dict, data, exp_point):
-    varz = LeveledArray("exec-variance")
+    varz    = LeveledArray("exec-variance")
+    flushes = LeveledArray("cache-flush")
+    loads   = LeveledArray("cache-load")
+
     completions = defaultdict(lambda: [])
     missed = defaultdict(lambda: int())
 
@@ -157,19 +161,31 @@ def extract_variance(task_dict, data, exp_point):
         try:
             pid = int(match.group("PID"))
             duration = float(match.group("EXEC"))
+            load  = float(match.group("LOAD"))
+            flush = float(match.group("FLUSH"))
+
+            if load:
+                loads.add(task_dict[pid], load)
+            if flush:
+                flushes.add(task_dict[pid], flush)
 
             # Last (exit) record often has exec time of 0
             missed[pid] += not bool(duration)
 
-            if missed[pid] > 1 or not pid: raise Exception()
+            if missed[pid] > 1 or not pid: #TODO: fix, raise Exception()
+                continue
         except:
-            raise Exception("Invalid completion record, missed - %d:"
+            raise Exception("Invalid completion record, missed: %d:"
                             "\n\t%s\n\t%s" % (missed[pid], match.groupdict(),
                                               match.group("RECORD")))
         completions[pid] += [duration]
 
     for pid, durations in completions.iteritems():
         job_times = np.array(durations)
+        mean = job_times.mean()
+
+        if not mean or not durations:
+            continue
 
         # Coefficient of variation
         cv = job_times.std() / job_times.mean()
@@ -179,11 +195,10 @@ def extract_variance(task_dict, data, exp_point):
         varz.add(task_dict[pid], corrected)
 
     varz.write_measurements(exp_point)
+    flushes.write_measurements(exp_point)
+    loads.write_measurements(exp_point)
 
-def config_exit_stats(task_dict, file):
-    with open(file, 'r') as f:
-        data = f.read()
-
+def config_exit_stats(task_dict, data):
     # Dictionary of task exit measurements by pid
     exits = get_task_exits(data)
     exit_dict = dict((e.id, e) for e in exits)
@@ -200,7 +215,7 @@ def config_exit_stats(task_dict, file):
         # Replace tasks with corresponding exit stats
         if not t.pid in exit_dict:
             raise Exception("Missing exit record for task '%s' in '%s'" %
-                            (t, file))
+                            (t, file.name))
         exit_list = [exit_dict[t.pid] for t in task_list]
         config_dict[config] = exit_list
 
@@ -212,13 +227,14 @@ def get_base_stats(base_file):
         return saved_stats[base_file]
     with open(base_file, 'r') as f:
         data = f.read()
-    result = config_exit_stats(data)
+    task_dict = get_task_dict(data)
+    result = config_exit_stats(task_dict, data)
     saved_stats[base_file] = result
     return result
 
 def extract_scaling_data(task_dict, data, result, base_file):
     # Generate trees of tasks with matching configurations
-    data_stats = config_exit_stats(data)
+    data_stats = config_exit_stats(task_dict, data)
     base_stats = get_base_stats(base_file)
 
     # Scaling factors are calculated by matching groups of tasks with the same
@@ -233,9 +249,12 @@ def extract_scaling_data(task_dict, data, result, base_file):
             # a task-to-task comparison
             continue
         for data_stat, base_stat in zip(data_stats[config],base_stats[config]):
+            if not base_stat[Type.Avg] or not base_stat[Type.Max] or \
+               not data_stat[Type.Avg] or not data_stat[Type.Max]:
+               continue
             # How much larger is their exec stat than ours?
-            avg_scale = float(base_stat[Type.Avg]) / float(base_stat[Type.Avg])
-            max_scale = float(base_stat[Type.Max]) / float(base_stat[Type.Max])
+            avg_scale = float(base_stat[Type.Avg]) / float(data_stat[Type.Avg])
+            max_scale = float(base_stat[Type.Max]) / float(data_stat[Type.Max])
 
             task = task_dict[data_stat.id]
 
@@ -251,8 +270,12 @@ def extract_sched_data(data_file, result, base_file):
 
     task_dict = get_task_dict(data)
 
-    extract_tardy_vals(task_dict, data, result)
-    extract_variance(task_dict, data, result)
+    try:
+        extract_tardy_vals(task_dict, data, result)
+        extract_variance(task_dict, data, result)
+    except Exception as e:
+        print("Error in %s" % data_file)
+        raise e
 
     if (base_file):
         extract_scaling_data(task_dict, data, result, base_file)

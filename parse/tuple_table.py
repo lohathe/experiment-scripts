@@ -5,6 +5,7 @@ from dir_map import DirMap
 class ColMap(object):
     def __init__(self):
         self.rev_map = {}
+        self.value_map = {}
         self.col_list = []
 
     def columns(self):
@@ -12,18 +13,12 @@ class ColMap(object):
 
     def get_key(self, kv):
         key = ()
-        added = 0
 
         for col in self.col_list:
             if col not in kv:
                 key += (None,)
             else:
-                added += 1
                 key += (kv[col],)
-
-        if added < len(kv):
-            raise Exception("column map '%s' missed field in map '%s'" %
-                            (self.col_list, kv))
 
         return key
 
@@ -36,10 +31,13 @@ class ColMap(object):
             map[self.col_list[i]] = tuple[i]
         return map
 
-    def try_add(self, column):
+    def try_add(self, column, value):
         if column not in self.rev_map:
-            self.rev_map[column] = len(self.col_list)
-            self.col_list += [column]
+            if column not in self.value_map:
+                self.value_map[column] = value
+            elif value != self.value_map[column]:
+                self.rev_map[column] = len(self.col_list)
+                self.col_list += [column]
 
     def __str__(self):
         return "<ColMap>%s" % (self.rev_map)
@@ -67,6 +65,7 @@ class TupleTable(object):
 
     def write_result(self, out_dir):
         dir_map = DirMap(out_dir)
+
         for key, point in self.table.iteritems():
             kv = self.col_map.get_map(key)
 
@@ -75,12 +74,13 @@ class TupleTable(object):
 
                 try:
                     float(val)
-                    kv.pop(col)
-                    dir_map.add_point(col, val, kv, point)
-                    kv[col] = val
                 except:
                     # Only vary numbers. Otherwise, just have seperate lines
                     continue
+
+                kv.pop(col)
+                dir_map.add_point(col, val, kv, point)
+                kv[col] = val
 
         dir_map.reduce()
         dir_map.write()

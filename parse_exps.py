@@ -20,6 +20,7 @@ def parse_args():
 
     parser.add_option('-o', '--out-dir', dest='out_dir',
                       help='directory for data output', default='parse-data')
+    # TODO: this means nothing
     parser.add_option('-c', '--clean', action='store_true', default=False,
                       dest='clean', help='do not output single-point csvs')
     parser.add_option('-s', '--scale-against', dest='scale_against',
@@ -47,8 +48,8 @@ def get_exp_params(data_dir, col_map):
             params.pop(ignored)
 
     # Track all changed params
-    for key in params.keys():
-        col_map.try_add(key)
+    for key, value in params.iteritems():
+        col_map.try_add(key, value)
 
     return params
 
@@ -122,6 +123,7 @@ def main():
                 base_params = copy.deepcopy(exp.params)
                 base_params.pop(base_conf.keys()[0])
                 base = base_table.get_exps(base_params)[0]
+
             # Write deadline misses / tardiness into result
             st.extract_sched_data(exp.data_files.st, result,
                                   base.data_files.st if base else None)
@@ -135,8 +137,7 @@ def main():
         sh.rmtree(opts.out_dir)
 
     # Remove un-plottable values
-    if opts.clean:
-        result_table.reduce()
+    result_table.reduce()
 
     result_table.write_result(opts.out_dir)
 

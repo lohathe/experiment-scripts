@@ -39,6 +39,7 @@ def get_ft_output(data_dir, out_dir, force=False):
         bins = [f for f in bins if os.stat("%s/%s"%(out_dir, f)).st_size]
 
         # Analyze will summarize those
+        # todo pass in f
         cmd_arr = [conf.BINS['analyze']]
         cmd_arr.extend(bins)
         with open(output_file, "w") as f:

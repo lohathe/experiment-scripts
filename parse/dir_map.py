@@ -15,7 +15,7 @@ class DirMap(object):
         for key in sorted(vals.keys()):
             val_strs += ["%s=%s" % (key, vals[key])]
         return "%s.csv" % ("_".join(val_strs))
-    
+
     def __init__(self, out_dir):
         self.root = TreeNode(None)
         self.out_dir = out_dir
@@ -49,8 +49,6 @@ class DirMap(object):
 
                     self.__update_node(path, keys, (vary_value, result))
 
-
-                        
     def reduce(self):
         def reduce2(node):
             for key in node.children.keys():
@@ -64,7 +62,7 @@ class DirMap(object):
 
         reduce2(self.root)
 
-    def write(self):    
+    def write(self):
         def write2(path, node):
             out_path = "/".join(path)
             if node.values:
@@ -73,7 +71,7 @@ class DirMap(object):
                     arr = [",".join([str(b) for b in n]) for n in node.values]
                     f.write("\n".join(arr) + "\n")
             elif not os.path.isdir(out_path):
-                os.mkdir(out_path)        
+                os.mkdir(out_path)
 
             for (key, child) in node.children.iteritems():
                 path.append(key)
@@ -94,11 +92,4 @@ class DirMap(object):
                 ret += "%s/%s\n" % (header, key)
                 ret += str2(child, level + 1)
             return ret
-            
         return "%s\n%s" % (self.out_dir, str2(self.root, 1))
-       
-        
-                
-        
-                
-            
