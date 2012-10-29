@@ -1,5 +1,6 @@
 """
 TODO: No longer very pythonic, lot of duplicate code
+print out task execution times
 """
 
 import config.config as conf
@@ -9,6 +10,7 @@ import numpy as np
 import subprocess
 
 from collections import namedtuple,defaultdict
+from operator import methodcaller
 from point import Measurement,Type
 
 PARAM_RECORD = r"(?P<RECORD>" +\
@@ -29,12 +31,14 @@ TARDY_RECORD = r"(?P<RECORD>" +\
   r"(?P<MISSES>[\d\.]+))"
 COMPLETION_RECORD = r"(?P<RECORD>" +\
   r"COMPLETION.*?(?P<PID>\d+)/.*?" +\
-  r"exec.*?(?P<EXEC>[\d\.]+)ms.*?"    +\
-  r"flush.*?(?P<FLUSH>[\d\.]+)ms.*?"  +\
-  r"load.*?(?P<LOAD>[\d\.]+)ms)"
+  r"exec:.*?(?P<EXEC>[\d\.]+)ms.*?"    +\
+  r"flush:.*?(?P<FLUSH>[\d\.]+)ms.*?"  +\
+  r"flush_work:.*?(?P<FLUSH_WORK>[\d]+).*?" +\
+  r"load:.*?(?P<LOAD>[\d\.]+)ms.*?"    +\
+  r"load_work:.*?(?P<LOAD_WORK>[\d]+))"
 
 TaskConfig = namedtuple('TaskConfig', ['cpu','wcet','period','type','level'])
-Task = namedtuple('Task', ['pid', 'config'])
+Task = namedtuple('Task', ['pid', 'config', 'run'])
 
 class LeveledArray(object):
     """
@@ -86,7 +90,7 @@ def get_tasks(data):
                                   float(match.group('WCET')),
                                   float(match.group('PERIOD')),
                                   match.group("CLASS"),
-                                  match.group("LEVEL")))
+                                  match.group("LEVEL")), [])
             if not (t.config.period and t.pid):
                 raise Exception()
             ret += [t]
@@ -144,15 +148,16 @@ def extract_tardy_vals(task_dict, data, exp_point):
         max_tards.add(t, max_tard / t.config.period)
         ratios.add(t, misses / jobs)
 
-    ratios.write_measurements(exp_point)
-    avg_tards.write_measurements(exp_point)
-    max_tards.write_measurements(exp_point)
+    map(methodcaller('write_measurements', exp_point),
+        [ratios, avg_tards, max_tards])
 
 # TODO: rename
 def extract_variance(task_dict, data, exp_point):
     varz    = LeveledArray("exec-variance")
     flushes = LeveledArray("cache-flush")
     loads   = LeveledArray("cache-load")
+    fworks  = LeveledArray("flush-work")
+    lworks  = LeveledArray("load-work")
 
     completions = defaultdict(lambda: [])
     missed = defaultdict(lambda: int())
@@ -163,11 +168,17 @@ def extract_variance(task_dict, data, exp_point):
             duration = float(match.group("EXEC"))
             load  = float(match.group("LOAD"))
             flush = float(match.group("FLUSH"))
+            lwork = int(match.group("LOAD_WORK"))
+            fwork = int(match.group("FLUSH_WORK"))
 
             if load:
                 loads.add(task_dict[pid], load)
+                lworks.add(task_dict[pid], lwork)
+                if not lwork: raise Exception()
             if flush:
                 flushes.add(task_dict[pid], flush)
+                fworks.add(task_dict[pid], fwork)
+                if not fwork: raise Exception()
 
             # Last (exit) record often has exec time of 0
             missed[pid] += not bool(duration)
@@ -181,6 +192,9 @@ def extract_variance(task_dict, data, exp_point):
         completions[pid] += [duration]
 
     for pid, durations in completions.iteritems():
+        # TODO: not this, please
+        task_dict[pid].run.append(Measurement(pid).from_array(durations))
+
         job_times = np.array(durations)
         mean = job_times.mean()
 
@@ -194,14 +208,15 @@ def extract_variance(task_dict, data, exp_point):
 
         varz.add(task_dict[pid], corrected)
 
-    varz.write_measurements(exp_point)
-    flushes.write_measurements(exp_point)
-    loads.write_measurements(exp_point)
+    if exp_point:
+        map(methodcaller('write_measurements', exp_point),
+            [varz, flushes, loads, fworks, lworks])
 
 def config_exit_stats(task_dict, data):
-    # Dictionary of task exit measurements by pid
-    exits = get_task_exits(data)
-    exit_dict = dict((e.id, e) for e in exits)
+    # # Dictionary of task exit measurements by pid
+    # exits = get_task_exits(data)
+    # exit_dict = dict((e.id, e) for e in exits)
+    extract_variance(task_dict, data, None)
 
     # Dictionary where keys are configurations, values are list
     # of tasks with those configuratino
@@ -212,11 +227,12 @@ def config_exit_stats(task_dict, data):
     for config in config_dict:
         task_list = sorted(config_dict[config])
 
-        # Replace tasks with corresponding exit stats
-        if not t.pid in exit_dict:
-            raise Exception("Missing exit record for task '%s' in '%s'" %
-                            (t, file.name))
-        exit_list = [exit_dict[t.pid] for t in task_list]
+        # # Replace tasks with corresponding exit stats
+        # if not t.pid in exit_dict:
+        #     raise Exception("Missing exit record for task '%s' in '%s'" %
+        #                     (t, file.name))
+        # exit_list = [exit_dict[t.pid] for t in task_list]
+        exit_list = [t.run[0] for t in task_list]
         config_dict[config] = exit_list
 
     return config_dict
@@ -228,6 +244,7 @@ def get_base_stats(base_file):
     with open(base_file, 'r') as f:
         data = f.read()
     task_dict = get_task_dict(data)
+
     result = config_exit_stats(task_dict, data)
     saved_stats[base_file] = result
     return result
@@ -248,15 +265,20 @@ def extract_scaling_data(task_dict, data, result, base_file):
             # Quit, we are missing a record and can't guarantee
             # a task-to-task comparison
             continue
+
         for data_stat, base_stat in zip(data_stats[config],base_stats[config]):
             if not base_stat[Type.Avg] or not base_stat[Type.Max] or \
                not data_stat[Type.Avg] or not data_stat[Type.Max]:
+               print("missing a thing: {},{}".format(base_stat, data_stat))
                continue
             # How much larger is their exec stat than ours?
+            print("%s vs %s" % (base_stat, data_stat))
             avg_scale = float(base_stat[Type.Avg]) / float(data_stat[Type.Avg])
             max_scale = float(base_stat[Type.Max]) / float(data_stat[Type.Max])
 
             task = task_dict[data_stat.id]
+
+            print("scaling for %s" % data_stat.id)
 
             avg_scales.add(task, avg_scale)
             max_scales.add(task, max_scale)

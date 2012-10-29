@@ -41,16 +41,22 @@ PARAMS = {'sched'  : 'scheduler',
           'kernel' : 'uname'}
 
 SCHED_EVENTS = range(501, 513)
-BASE_EVENTS  = ['SCHED', 'RELEASE', 'SCHED2', 'TICK', 'CXS']
+BASE_EVENTS  = ['SCHED', 'RELEASE', 'SCHED2', 'TICK', 'CXS', 'SEND_RESCHED']
+BASE_EVENTS += ['CQ_ENQUEUE_READ', 'CQ_ENQUEUE_FLUSH', 'CQ_SUBMIT_WORK',
+                'CQ_LOOP_WORK_CHECK', 'CQ_LOOP_PEACE_OUT', 'CQ_LOOP_BRANCH',
+                'CQ_WORK_DO_WORK', 'CQ_WORK_NOTIFY', 'CQ_PHASE_WAIT']
 
 # Expand for mixed-crit
-# CRIT_EVENTS  = ['LVL{}_SCHED', 'LVL{}_RELEASE']
-# CRIT_LEVELS  = ['A', 'B', 'C']
-# BASE_EVENTS += [s.format(l) for (l,s) in
-#                 itertools.product(CRIT_LEVELS, CRIT_EVENTS)]
+# TODO don't use split
+CRIT_EVENTS  = ['LVL{}_SCHED', 'LVL{}_RELEASE']
+CRIT_LEVELS  = ['A', 'B', 'C']
+BASE_EVENTS += [s.format(l) for (l,s) in
+                itertools.product(CRIT_LEVELS, CRIT_EVENTS)]
 
 ALL_EVENTS   = ["%s_%s" % (e, t) for (e,t) in
                 itertools.product(BASE_EVENTS, ["START","END"])]
+ALL_EVENTS  += ['RELEASE_LATENCY']
+BASE_EVENTS += ['RELEASE_LATENCY']
 
 valid = True
 for repo, loc in REPOS.items():

@@ -16,7 +16,14 @@ def make_typemap():
     return copy.deepcopy(default_typemap)
 
 def dict_str(adict, sep = "\n"):
-    return sep.join(["%s: %s" % (k, str(v)) for (k,v) in sorted(adict.iteritems())])
+    def num_str(v):
+        try:
+            float(v)
+            return "%6.3f" % v
+        except:
+            return v
+    size = 20 if sep == "\n" else 4
+    return sep.join([("%" + str(size) + "s: %9s") % (k, num_str(v)) for (k,v) in sorted(adict.iteritems())])
 
 class Measurement(object):
     def __init__(self, id = None, kv = {}):
@@ -52,7 +59,7 @@ class Measurement(object):
         self.stats[type] = value
 
     def __str__(self):
-        return "<Measurement-%s> %s" % (self.id, dict_str(self.stats, " "))
+        return "%s" % dict_str(self.stats, " ")
             
 
 class Summary(Measurement):

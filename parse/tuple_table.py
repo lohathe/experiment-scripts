@@ -48,6 +48,7 @@ class TupleTable(object):
         self.table = defaultdict(lambda: [])
         self.reduced = False
 
+    # TODO: rename, make exp agnostic, extend for exps
     def add_exp(self, kv, point):
         key = self.col_map.get_key(kv)
         self.table[key] += [point]
@@ -55,6 +56,10 @@ class TupleTable(object):
     def get_exps(self, kv):
         key = self.col_map.get_key(kv)
         return self.table[key]
+
+    def __contains__(self, kv):
+        key = self.col_map.get_key(kv)
+        return key in self.table
 
     def reduce(self):
         if self.reduced:

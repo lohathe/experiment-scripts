@@ -41,6 +41,7 @@ def get_ft_output(data_dir, out_dir, force=False):
         # Analyze will summarize those
         # todo pass in f
         cmd_arr = [conf.BINS['analyze']]
+        print("cmd arr: %s-%s" % (cmd_arr, bins))
         cmd_arr.extend(bins)
         with open(output_file, "w") as f:
             subprocess.call(cmd_arr, cwd=out_dir, stdout=f, stderr=err_file)
