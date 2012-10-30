@@ -11,6 +11,7 @@ import os
 import re
 import numpy as np
 import subprocess
+import pprint
 
 from collections import namedtuple,defaultdict
 from operator import methodcaller
@@ -54,6 +55,7 @@ class LeveledArray(object):
     def add(self, task, value):
         self.vals[task.config.level] += [value]
 
+
     def write_measurements(self, result):
         for level, arr in self.vals.iteritems():
             name = "%s%s" % ("%s-" % level if level else "", self.name)
@@ -72,7 +74,6 @@ def get_st_output(data_dir, out_dir, force=False):
         if force:
             os.remove(output_file)
         else:
-            print("st-output already exists for %s" % data_dir)
             return output_file
 
     if len(bins) != 0:
@@ -195,8 +196,11 @@ def extract_variance(task_dict, data, exp_point):
         completions[pid] += [duration]
 
     for pid, durations in completions.iteritems():
+        m = Measurement(pid).from_array(durations)
+
         # TODO: not this, please
-        task_dict[pid].run.append(Measurement(pid).from_array(durations))
+        if not task_dict[pid].run:
+            task_dict[pid].run.append(m)
 
         job_times = np.array(durations)
         mean = job_times.mean()
@@ -210,6 +214,7 @@ def extract_variance(task_dict, data, exp_point):
         corrected = (1 + 1/(4 * len(job_times))) * cv
 
         varz.add(task_dict[pid], corrected)
+        # varz.add(task_dict[pid], m[Type.Var])
 
     if exp_point:
         map(methodcaller('write_measurements', exp_point),
@@ -272,16 +277,12 @@ def extract_scaling_data(task_dict, data, result, base_file):
         for data_stat, base_stat in zip(data_stats[config],base_stats[config]):
             if not base_stat[Type.Avg] or not base_stat[Type.Max] or \
                not data_stat[Type.Avg] or not data_stat[Type.Max]:
-               print("missing a thing: {},{}".format(base_stat, data_stat))
                continue
             # How much larger is their exec stat than ours?
-            print("%s vs %s" % (base_stat, data_stat))
             avg_scale = float(base_stat[Type.Avg]) / float(data_stat[Type.Avg])
             max_scale = float(base_stat[Type.Max]) / float(data_stat[Type.Max])
 
             task = task_dict[data_stat.id]
-
-            print("scaling for %s" % data_stat.id)
 
             avg_scales.add(task, avg_scale)
             max_scales.add(task, max_scale)

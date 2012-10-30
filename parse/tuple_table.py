@@ -21,7 +21,6 @@ class ColMap(object):
                 key += (None,)
             else:
                 key += (kv[col],)
-
         return key
 
     def __contains__(self, col):
@@ -43,6 +42,15 @@ class ColMap(object):
                 self.value_map[column] = value
             elif value != self.value_map[column]:
                 self.force_add(column)
+                del(self.value_map[column])
+
+    def try_remove(self, column):
+        if column in self.rev_map:
+            idx = self.rev_map[column]
+            for value in self.col_list[idx+1:]:
+                self.rev_map[value] -= 1
+            del(self.col_list[self.rev_map[column]])
+            del(self.rev_map[column])
 
     def __str__(self):
         return "<ColMap>%s" % (self.rev_map)
