@@ -37,12 +37,13 @@ class Measurement(object):
         self[Type.Max] = array.max()
         self[Type.Avg] = array.mean()
         self[Type.Var] = array.var()
+        self[Type.Min] = array.min()
         return self
 
     def __check_type(self, type):
         if not type in Type:
             raise AttributeError("Not a valid type '%s'" % type)
-        
+
     def __getitem__(self, type):
         self.__check_type(type)
         return self.stats[type]
@@ -60,11 +61,11 @@ class Measurement(object):
 
     def __str__(self):
         return "%s" % dict_str(self.stats, " ")
-            
+
 
 class Summary(Measurement):
     def __init__(self, id, measures, typemap = default_typemap):
-        super(Summary, self).__init__("Summary-%s" % id)
+        super(Summary, self).__init__(id)
 
         self.__check_types(measures, typemap)
         self.__summarize(measures, typemap)
@@ -108,7 +109,7 @@ class ExpPoint(object):
     def __check_val(self, obj):
         if not isinstance(obj, Measurement):
             raise AttributeError("Not a valid measurement '%s'" % obj)
-        
+
     def __getitem__(self, type):
         return self.stats[type]
 

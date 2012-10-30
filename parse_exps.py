@@ -16,10 +16,12 @@ from parse.point import ExpPoint
 from parse.tuple_table import ColMap,TupleTable
 
 def parse_args():
+    # TODO: convert data-dir to proper option
     parser = OptionParser("usage: %prog [options] [data_dir]...")
 
-    parser.add_option('-o', '--out-dir', dest='out_dir',
-                      help='directory for data output', default='parse-data')
+    parser.add_option('-o', '--out', dest='out',
+                      help='file or directory for data output', default='parse-data')
+
     # TODO: this means nothing
     parser.add_option('-c', '--clean', action='store_true', default=False,
                       dest='clean', help='do not output single-point csvs')
@@ -30,6 +32,9 @@ def parse_args():
                       dest='force', help='overwrite existing data')
     parser.add_option('-v', '--verbose', action='store_true', default=False,
                       dest='verbose', help='print out data points')
+    parser.add_option('-m', '--write-map', action='store_true', default=False,
+                      dest='write_map',
+                      help='Output map of values instead of csv tree')
 
     return parser.parse_args()
 
@@ -102,8 +107,8 @@ def main():
         raise IOError("Base column '%s' not present in any parameters!" %
                       base_conf.keys()[0])
 
-    base_table   = TupleTable(col_map)
-    result_table = TupleTable(col_map)
+    base_table = TupleTable(col_map) # For tracking 'base' experiments
+    result_table  = TupleTable(col_map) # For generating csv directories
 
     # Used to find matching scaling_base for each experiment
     for base in scaling_bases:
@@ -133,13 +138,17 @@ def main():
         if opts.verbose:
             print(result)
 
-    if opts.force and os.path.exists(opts.out_dir):
-        sh.rmtree(opts.out_dir)
+    if opts.force and os.path.exists(opts.out):
+        sh.rmtree(opts.out)
 
-    # Remove un-plottable values
     result_table.reduce()
 
-    result_table.write_result(opts.out_dir)
+    if opts.write_map:
+        # Write summarized results into map
+        result_table.write_map(opts.out)
+    else:
+        # Write out csv directories for all variable params
+        result_table.write_csvs(opts.out)
 
 if __name__ == '__main__':
     main()

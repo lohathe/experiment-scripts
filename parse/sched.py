@@ -1,6 +1,9 @@
 """
 TODO: No longer very pythonic, lot of duplicate code
-print out task execution times
+print out task execution times or something
+get miss ratio and tardiness directly from schedule OR
+email list about turning on optional summary statistics OR
+set up run exps to only get release and completions to get these stats
 """
 
 import config.config as conf
