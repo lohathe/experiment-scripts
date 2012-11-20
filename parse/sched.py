@@ -11,7 +11,6 @@ import os
 import re
 import numpy as np
 import subprocess
-import pprint
 
 from collections import namedtuple,defaultdict
 from operator import methodcaller

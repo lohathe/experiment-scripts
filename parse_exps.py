@@ -42,7 +42,7 @@ def parse_args():
     return parser.parse_args()
 
 ExpData   = namedtuple('ExpData', ['name', 'params', 'data_files', 'is_base'])
-DataFiles = namedtuple('DataFiles', ['ft','st'])
+DataFiles = namedtuple('DataFiles', ['st'])
 
 def get_exp_params(data_dir, col_map):
     param_file = "%s/%s" % (data_dir, conf.DEFAULTS['params_file'])
@@ -82,10 +82,7 @@ def gen_exp_data(exp_dirs, base_conf, col_map, force):
 
         # Read and translate exp output files
         params = get_exp_params(data_dir, col_map)
-        cycles = int(params[conf.PARAMS['cycles']])
         st_output = st.get_st_output(data_dir, tmp_dir, force)
-        ft_output = ft.get_ft_output(data_dir, cycles, tmp_dir, force)
-
 
         if base_conf and base_conf.viewitems() & params.viewitems():
             if not st_output:
@@ -97,14 +94,14 @@ def gen_exp_data(exp_dirs, base_conf, col_map, force):
             base_params.pop(base_conf.keys()[0])
 
             base_exp = ExpData(data_dir, base_params,
-                               DataFiles(ft_output, st_output), True)
+                               DataFiles(st_output), True)
             scaling_bases += [base_exp]
         else:
             is_base = False
 
         # Create experiment named after the data dir
         exp_data = ExpData(data_dir, params,
-                           DataFiles(ft_output, st_output), is_base)
+                           DataFiles(st_output), is_base)
 
         plain_exps += [exp_data]
 
@@ -142,12 +139,19 @@ def main():
         base_table.add_exp(base.params, base)
 
     sys.stderr.write("Parsing data...\n")
+    for exp in args:
+        result = ExpPoint(exp)
+        params = get_exp_params(exp, col_map)
+        # Write overheads into result
+        ft.extract_ft_data(result, exp,
+                           params[conf.PARAMS['cycles']],
+                           exp + "/tmp")
+        
+        if opts.verbose:
+            print(result)
+
     for i,exp in enumerate(plain_exps):
         result = ExpPoint(exp.name)
-
-        if exp.data_files.ft:
-            # Write overheads into result
-            ft.extract_ft_data(exp.data_files.ft, result, conf.BASE_EVENTS)
 
         if exp.data_files.st:
             base = None

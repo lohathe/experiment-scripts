@@ -67,8 +67,8 @@ def convert_data(data):
     return {'proc' : procs, 'spin' : spins}
 
 def fix_paths(schedule, exp_dir, sched_file):
+    """Replace relative paths of command line arguments with absolute ones."""
     for (idx, (spin, args)) in enumerate(schedule['spin']):
-        # Replace relative paths (if present) with absolute ones
         for arg in re.split(" +", args):
             abspath = "%s/%s" % (exp_dir, arg)
             if os.path.exists(abspath):
@@ -136,8 +136,8 @@ def run_exp(name, schedule, scheduler, kernel, duration, work_dir, out_dir):
     proc_entries = []
     executables  = []
 
-    # if kernel and not lu.uname_matches(kernel):
-    #     raise InvalidKernel(kernel)
+    if kernel and not lu.uname_matches(kernel):
+        raise InvalidKernel(kernel)
 
     # Parse values for proc entries
     for entry_conf in schedule['proc']:
