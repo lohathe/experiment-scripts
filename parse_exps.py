@@ -52,12 +52,16 @@ def get_exp_params(data_dir, col_map):
     # Keep only params that uniquely identify the experiment
     params = load_params(param_file)
     for ignored in conf.PARAMS.itervalues():
-        if ignored in params:
+        # Always include cycles or overhead parsing fails
+        if ignored in params and ignored != conf.PARAMS['cycles']:
             params.pop(ignored)
 
     # Track all changed params
     for key, value in params.iteritems():
         col_map.try_add(key, value)
+
+    if conf.PARAMS['cycles'] not in params:
+        params[conf.PARAMS['cycles']] = conf.DEFAULTS['cycles']
 
     return params
 
@@ -78,8 +82,9 @@ def gen_exp_data(exp_dirs, base_conf, col_map, force):
 
         # Read and translate exp output files
         params = get_exp_params(data_dir, col_map)
+        cycles = int(params[conf.PARAMS['cycles']])
         st_output = st.get_st_output(data_dir, tmp_dir, force)
-        ft_output = ft.get_ft_output(data_dir, tmp_dir, force)
+        ft_output = ft.get_ft_output(data_dir, cycles, tmp_dir, force)
 
 
         if base_conf and base_conf.viewitems() & params.viewitems():

@@ -17,6 +17,19 @@ def num_cpus():
                 cpus += 1
     return cpus
 
+def cpu_freq():
+    """
+    The frequency (in MHz) of the CPU.
+    """
+    reg = re.compile(r'^cpu MHz\s*:\s*(\d+)', re.M)
+    with open('/proc/cpuinfo', 'r') as f:
+        data = f.read()
+
+    match = re.search(reg, data)
+    if not match:
+        raise Exception("Cannot parse CPU frequency!")
+    return int(match.group(1))
+
 def switch_scheduler(switch_to_in):
     """Switch the scheduler to whatever is passed in.
 

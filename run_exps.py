@@ -114,9 +114,11 @@ def load_experiment(sched_file, scheduler, duration, param_file, out_dir):
     run_exp(sched_file, schedule, scheduler, kernel, duration, work_dir, out_dir)
 
     # Save parameters used to run experiment in out_dir
+    # Cycles is saved here for accurate overhead calculations later
     out_params = dict(params.items() +
-                      [(conf.PARAMS['sched'], scheduler),
-                       (conf.PARAMS['dur'],   duration)])
+                      [(conf.PARAMS['sched'],  scheduler),
+                       (conf.PARAMS['dur'],    duration),
+                       (conf.PARAMS['cycles'], lu.cpu_freq())])
     with open("%s/%s" % (out_dir, conf.DEFAULTS['params_file']), 'w') as f:
         f.write(str(out_params))
 

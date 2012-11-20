@@ -178,7 +178,8 @@ class Experiment(object):
         self.log("Writing %d proc entries" % len(self.proc_entries))
         map(methodcaller('write_proc'), self.proc_entries)
 
-        time.sleep(5)
+        if len(self.proc_entries):
+            time.sleep(2)
 
         self.log("Switching to %s" % self.scheduler)
         litmus_util.switch_scheduler(self.scheduler)
