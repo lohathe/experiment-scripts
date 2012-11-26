@@ -4,7 +4,7 @@ import signal
 from ..litmus_util import is_executable
 
 class Executable(object):
-    """Parent object that represents an executable for use in task-sets."""
+    '''Parent object that represents an executable for use in task-sets.'''
 
     def __init__(self, exec_file, extra_args=None, stdout_file = None, stderr_file = None):
         self.exec_file = exec_file
@@ -47,7 +47,7 @@ class Executable(object):
         return " ".join(self.__get_full_command())
 
     def execute(self):
-        """Execute the binary."""
+        '''Execute the binary.'''
         full_command = self.__get_full_command()
         self.sp = subprocess.Popen(full_command, stdout=self.stdout_file,
                 stderr=self.stderr_file, cwd=self.cwd)
@@ -59,15 +59,15 @@ class Executable(object):
         self.sp.send_signal(signal.SIGINT)
 
     def terminate(self):
-        """Send the terminate signal to the binary."""
+        '''Send the terminate signal to the binary.'''
         self.sp.terminate()
 
     def wait(self):
-        """Wait until the executable is finished, checking return code.
+        '''Wait until the executable is finished, checking return code.
 
         If the exit status is non-zero, raise an exception.
 
-        """
+        '''
 
         self.sp.wait()
         if self.sp.returncode != 0:

@@ -39,7 +39,7 @@ def parse_args():
 
 
 def convert_data(data):
-    """Convert a non-python schedule file into the python format"""
+    '''Convert a non-python schedule file into the python format'''
     regex = re.compile(
         r"(?P<PROC>^"
             r"(?P<HEADER>/proc/[\w\-]+?/)?"
@@ -67,7 +67,7 @@ def convert_data(data):
     return {'proc' : procs, 'spin' : spins}
 
 def fix_paths(schedule, exp_dir, sched_file):
-    """Replace relative paths of command line arguments with absolute ones."""
+    '''Replace relative paths of command line arguments with absolute ones.'''
     for (idx, (spin, args)) in enumerate(schedule['spin']):
         for arg in re.split(" +", args):
             abspath = "%s/%s" % (exp_dir, arg)

@@ -4,10 +4,10 @@ import stat
 from executable import Executable
 
 class FTcat(Executable):
-    """Used to wrap the ftcat binary in the Experiment object."""
+    '''Used to wrap the ftcat binary in the Experiment object.'''
 
     def __init__(self, ft_cat_bin, stdout_file, stderr_file, dev, events, cpu=None):
-        """Extends the Executable initializer method with ftcat attributes."""
+        '''Extends the Executable initializer method with ftcat attributes.'''
 
         # hack to run FTCat at higher priority
         chrt_bin = '/usr/bin/chrt'

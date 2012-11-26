@@ -5,19 +5,19 @@ from operator import methodcaller
 from tracer import SchedTracer, LogTracer, PerfTracer, LinuxTracer, OverheadTracer
 
 class ExperimentException(Exception):
-    """Used to indicate when there are problems with an experiment."""
+    '''Used to indicate when there are problems with an experiment.'''
     def __init__(self, name):
         self.name = name
 
 
 class ExperimentDone(ExperimentException):
-    """Raised when an experiment looks like it's been run already."""
+    '''Raised when an experiment looks like it's been run already.'''
     def __str__(self):
         return "Experiment finished already: %d" % self.name
 
 
 class ExperimentInterrupted(ExperimentException):
-    """Raised when an experiment appears to be interrupted (partial results)."""
+    '''Raised when an experiment appears to be interrupted (partial results).'''
     def __str__(self):
         return "Experiment was interrupted in progress: %d" % self.name
 
@@ -28,11 +28,11 @@ class ExperimentFailed(ExperimentException):
 
 
 class Experiment(object):
-    """Execute one task-set and save the results. Experiments have unique IDs."""
+    '''Execute one task-set and save the results. Experiments have unique IDs.'''
     INTERRUPTED_DIR = ".interrupted"
 
     def __init__(self, name, scheduler, working_dir, finished_dir, proc_entries, executables):
-        """Run an experiment, optionally wrapped in tracing."""
+        '''Run an experiment, optionally wrapped in tracing.'''
 
         self.name = name
         self.scheduler = scheduler

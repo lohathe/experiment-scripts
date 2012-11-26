@@ -11,27 +11,8 @@ FT_SPLIT_NAME  = "overhead={}.bin"
 FT_SORTED_NAME = "sorted-ft.bin"
 FT_ERR_NAME    = "err-ft"
 
-def extract_ft_data(result, data_dir, cycles, tmp_dir):
-    freg = conf.FILES['ft_data'] + "$"
-    bins = [f for f in os.listdir(data_dir) if re.match(freg, f)]
-
-    if not len(bins):
-        return False
-
-    bin_file = "{}/{}".format(data_dir, bins[0])
-
-    with open("%s/%s" % (tmp_dir, FT_ERR_NAME), 'w') as err_file:
-        sorted_bin = sort_ft(bin_file, err_file, tmp_dir)
-
-        for event in conf.BASE_EVENTS:
-            parse_overhead(result, sorted_bin, event, cycles,
-                           tmp_dir, err_file)
-
-        os.remove(sorted_bin)
-
-    return True
-
 def parse_overhead(result, overhead_bin, overhead, cycles, out_dir, err_file):
+    '''Store statistics for @overhead in @overhead_bin into @result.'''
     ovh_fname = "{}/{}".format(out_dir, FT_SPLIT_NAME).format(overhead)
 
     if os.path.exists(ovh_fname):
@@ -39,7 +20,7 @@ def parse_overhead(result, overhead_bin, overhead, cycles, out_dir, err_file):
     ovh_file = open(ovh_fname, 'w')
 
     # Extract matching overhead events into a seperate file
-    cmd  = [conf.BINS["split"], "-r", "-b", overhead, overhead_bin]
+    cmd  = [conf.BINS["ftsplit"], "-r", "-b", overhead, overhead_bin]
     ret  = subprocess.call(cmd, cwd=out_dir, stderr=err_file, stdout=ovh_file)
     size = os.stat(ovh_fname).st_size
 
@@ -65,9 +46,7 @@ def parse_overhead(result, overhead_bin, overhead, cycles, out_dir, err_file):
         os.remove(ovh_fname)
 
 def sort_ft(ft_file, err_file, out_dir):
-    """
-    Create and return file with sorted overheads from @ft_file.
-    """
+    '''Create and return file with sorted overheads from @ft_file.'''
     out_fname = "{}/{}".format(out_dir, FT_SORTED_NAME)
 
     # Sort happens in-place
@@ -79,3 +58,23 @@ def sort_ft(ft_file, err_file, out_dir):
         raise Exception("Sort failed with command: %s" % " ".join(cmd))
 
     return out_fname
+
+def extract_ft_data(result, data_dir, work_dir, cycles):
+    freg = conf.FILES['ft_data'] + "$"
+    bins = [f for f in os.listdir(data_dir) if re.match(freg, f)]
+
+    if not len(bins):
+        return False
+
+    bin_file = "{}/{}".format(data_dir, bins[0])
+
+    with open("%s/%s" % (work_dir, FT_ERR_NAME), 'w') as err_file:
+        sorted_bin = sort_ft(bin_file, err_file, work_dir)
+
+        for event in conf.BASE_EVENTS:
+            parse_overhead(result, sorted_bin, event, cycles,
+                           work_dir, err_file)
+
+        os.remove(sorted_bin)
+
+    return True

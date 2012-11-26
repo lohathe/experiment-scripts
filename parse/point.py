@@ -1,6 +1,6 @@
-"""
+'''
 Too much duplicate code in this file
-"""
+'''
 
 import copy
 import numpy as np

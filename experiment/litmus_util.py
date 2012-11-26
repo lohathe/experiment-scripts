@@ -6,7 +6,7 @@ import stat
 import config.config as conf
 
 def num_cpus():
-    """Return the number of CPUs in the system."""
+    '''Return the number of CPUs in the system.'''
 
     lnx_re = re.compile(r'^(processor|online)')
     cpus = 0
@@ -18,9 +18,9 @@ def num_cpus():
     return cpus
 
 def cpu_freq():
-    """
+    '''
     The frequency (in MHz) of the CPU.
-    """
+    '''
     reg = re.compile(r'^cpu MHz\s*:\s*(\d+)', re.M)
     with open('/proc/cpuinfo', 'r') as f:
         data = f.read()
@@ -31,12 +31,12 @@ def cpu_freq():
     return int(match.group(1))
 
 def switch_scheduler(switch_to_in):
-    """Switch the scheduler to whatever is passed in.
+    '''Switch the scheduler to whatever is passed in.
 
     This methods sleeps for two seconds to give Linux the chance to execute
     schedule switching code. Raises an exception if the switch does not work.
 
-    """
+    '''
 
     switch_to = str(switch_to_in).strip()
 
@@ -57,7 +57,7 @@ def uname_matches(reg):
     return bool( re.match(reg, data) )
 
 def is_executable(fname):
-    """Return whether the file passed in is executable"""
+    '''Return whether the file passed in is executable'''
     mode = os.stat(fname)[stat.ST_MODE]
     return mode & stat.S_IXUSR and mode & stat.S_IRUSR
 
