@@ -19,24 +19,24 @@ class Tracer(object):
         map(methodcaller('terminate'), self.bins)
         map(methodcaller('wait'), self.bins)
 
-        
+
 class LinuxTracer(Tracer):
     EVENT_ROOT = "/sys/kernel/debug/tracing"
     LITMUS_EVENTS = "%s/events/litmus" % EVENT_ROOT
 
     def __init__(self, output_dir):
         super(LinuxTracer, self).__init__("trace-cmd", output_dir)
-        
+
         extra_args = ["record", # "-e", "sched:sched_switch",
                       "-e", "litmus:*",
                       "-o", "%s/%s" % (output_dir, conf.FILES['linux_data'])]
         stdout = open('%s/trace-cmd-stdout.txt' % self.output_dir, 'w')
         stderr = open('%s/trace-cmd-stderr.txt' % self.output_dir, 'w')
-        
+
         execute = Executable(conf.BINS['trace-cmd'], extra_args, stdout, stderr)
         execute.cwd = output_dir
         self.bins.append(execute)
-        
+
     @staticmethod
     def enabled():
         return os.path.exists(LinuxTracer.LITMUS_EVENTS)
@@ -45,13 +45,13 @@ class LinuxTracer(Tracer):
         map(methodcaller('interrupt'), self.bins)
         map(methodcaller('wait'), self.bins)
 
-    
+
 class LogTracer(Tracer):
     DEVICE_STR = '/dev/litmus/log'
 
     def __init__(self, output_dir):
         super(LogTracer, self).__init__("Logger", output_dir)
-        
+
         out_file = open("%s/%s" % (self.output_dir, conf.FILES['log_data']), 'w')
 
         cat = (Executable("/bin/cat", [LogTracer.DEVICE_STR]))
@@ -62,7 +62,7 @@ class LogTracer(Tracer):
     @staticmethod
     def enabled():
         return litmus_util.is_device(LogTracer.DEVICE_STR)
-    
+
 
 class SchedTracer(Tracer):
     DEVICE_STR = '/dev/litmus/sched_trace'
@@ -84,7 +84,7 @@ class SchedTracer(Tracer):
     def enabled():
 		return litmus_util.is_device("%s%d" % (SchedTracer.DEVICE_STR, 0))
 
-    
+
 class OverheadTracer(Tracer):
     DEVICE_STR = '/dev/litmus/ft_trace0'
 
@@ -94,7 +94,7 @@ class OverheadTracer(Tracer):
         stdout_f = open('{0}/{1}'.format(self.output_dir, conf.FILES['ft_data']), 'w')
         stderr_f = open('{0}/{1}.stderr.txt'.format(self.output_dir, conf.FILES['ft_data']), 'w')
         ftc = FTcat(conf.BINS['ftcat'], stdout_f, stderr_f,
-                OverheadTracer.DEVICE_STR, conf.ALL_EVENTS)
+                OverheadTracer.DEVICE_STR, conf.OVH_ALL_EVENTS)
 
         self.bins.append(ftc)
 

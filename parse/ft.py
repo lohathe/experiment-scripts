@@ -71,7 +71,7 @@ def extract_ft_data(result, data_dir, work_dir, cycles):
     with open("%s/%s" % (work_dir, FT_ERR_NAME), 'w') as err_file:
         sorted_bin = sort_ft(bin_file, err_file, work_dir)
 
-        for event in conf.BASE_EVENTS:
+        for event in conf.OVH_BASE_EVENTS:
             parse_overhead(result, sorted_bin, event, cycles,
                            work_dir, err_file)
 

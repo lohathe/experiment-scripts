@@ -32,8 +32,8 @@ class TimeTracker:
         self.job   = record.job
 
 # Data stored for each task
-TaskParams  = namedtuple('TaskParams',  ['wcet', 'period', 'cpu'])
-TaskData    = recordtype('TaskData',    ['params', 'jobs', 'blocks', 'misses'])
+TaskParams = namedtuple('TaskParams',  ['wcet', 'period', 'cpu'])
+TaskData   = recordtype('TaskData',    ['params', 'jobs', 'blocks', 'misses'])
 
 # Map of event ids to corresponding class, binary format, and processing methods
 RecordInfo = namedtuple('RecordInfo', ['clazz', 'fmt', 'method'])
@@ -151,10 +151,12 @@ def extract_sched_data(result, data_dir, work_dir):
         return
 
     # Save an in-english version of the data for debugging
-    cmd_arr = [conf.BINS['st_show']]
-    cmd_arr.extend(bins)
-    with open(output_file, "w") as f:
-        subprocess.call(cmd_arr, cwd=data_dir, stdout=f)
+    # This is optional and will only be done if 'st_show' is in PATH
+    if conf.BINS['st_show']:
+        cmd_arr = [conf.BINS['st_show']]
+        cmd_arr.extend(bins)
+        with open(output_file, "w") as f:
+            subprocess.call(cmd_arr, cwd=data_dir, stdout=f)
 
     task_dict = defaultdict(lambda :
                             TaskData(0, 0, TimeTracker(), TimeTracker()))

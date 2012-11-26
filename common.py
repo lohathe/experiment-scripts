@@ -2,6 +2,29 @@ import sys
 from collections import defaultdict
 from textwrap import dedent
 
+def get_executable(prog, hint, optional=False):
+    import os
+    def is_exe(fpath):
+        return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
+
+    fpath, fname = os.path.split(prog)
+    if fpath:
+        if is_exe(prog):
+            return prog
+    else:
+        for path in os.environ["PATH"].split(os.pathsep):
+            exe_file = os.path.join(path, prog)
+            if is_exe(exe_file):
+                return exe_file
+
+    if not optional:
+        sys.stderr.write("Cannot find executable '%s' in PATH. This is a part "
+                         "of '%s' which should be added to PATH to run." %
+                         (prog, hint))
+        sys.exit(1)
+    else:
+        return None
+
 def recordtype(typename, field_names, default=0):
     ''' Mutable namedtuple. Recipe from George Sakkis of MIT.'''
     field_names = tuple(map(str, field_names))
@@ -87,5 +110,3 @@ def load_params(fname):
         raise IOError("Invalid param file: %s\n%s" % (fname, e))
 
     return params
-
-
