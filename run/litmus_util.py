@@ -67,6 +67,17 @@ def is_device(dev):
     mode = os.stat(dev)[stat.ST_MODE]
     return not (not mode & stat.S_IFCHR)
 
+def waiting_tasks():
+    reg = re.compile(r'^ready.*(?P<READY>\d+)$', re.M)
+    with open('/proc/litmus/stats', 'r') as f:
+        data = f.read()
+
+    # Ignore if no tasks are waiting for release
+    match = re.search(reg, data)
+    ready = match.group("READY")
+
+    return 0 if not ready else int(ready)
+
 def release_tasks():
 
     try:
