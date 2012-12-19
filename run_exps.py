@@ -2,7 +2,7 @@
 from __future__ import print_function
 
 import config.config as conf
-import experiment.litmus_util as lu
+import run.litmus_util as lu
 import os
 import re
 import shutil
@@ -10,9 +10,9 @@ import traceback
 
 from common import load_params
 from optparse import OptionParser
-from experiment.executable.executable import Executable
-from experiment.experiment import Experiment,ExperimentDone
-from experiment.proc_entry import ProcEntry
+from run.executable.executable import Executable
+from run.experiment import Experiment,ExperimentDone
+from run.proc_entry import ProcEntry
 
 def InvalidKernel(Exception):
     def __init__(self, kernel):
