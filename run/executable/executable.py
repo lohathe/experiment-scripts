@@ -16,7 +16,7 @@ class Executable(object):
         if extra_args is None:
             self.extra_args = None
         else:
-            self.extra_args = list(extra_args) # make a duplicate
+            self.extra_args = [str(a) for a in list(extra_args)] # make a duplicate
 
         if not is_executable(self.exec_file):
             raise Exception("Not executable ? : %s" % self.exec_file)
@@ -44,6 +44,7 @@ class Executable(object):
         return full_command
 
     def __str__(self):
+        print("Full command: %s" % self.__get_full_command())
         return " ".join(self.__get_full_command())
 
     def execute(self):

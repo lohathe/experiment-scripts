@@ -8,7 +8,7 @@ import re
 import shutil
 import traceback
 
-from common import load_params
+from common import load_params,get_executable
 from optparse import OptionParser
 from run.executable.executable import Executable
 from run.experiment import Experiment,ExperimentDone
@@ -46,7 +46,7 @@ def convert_data(data):
             r"(?P<ENTRY>[\w\-\/]+)"
               r"\s*{\s*(?P<CONTENT>.*?)\s*?}$)|"
         r"(?P<SPIN>^"
-            r"(?P<TYPE>\w+?spin)?\s*"
+            r"(?:(?P<TYPE>\w+) )?\s*"
             r"(?P<ARGS>[\w\-_\d\. \=]+)\s*$)",
         re.S|re.I|re.M)
 
@@ -164,7 +164,9 @@ def run_exp(name, schedule, scheduler, kernel, duration, work_dir, out_dir):
         #     raise IndexError("No knowledge of program %s: %s" % (spin, name))
 
         real_spin = get_executable(spin, "")
-        real_args = ['-w'] + args.split() + [duration]
+        real_args = args.split()
+        if re.match(".*spin", real_spin):
+            real_args = ['-w'] + real_args + [duration]
 
         if not lu.is_executable(real_spin):
             raise OSError("Cannot run spin %s: %s" % (real_spin, name))

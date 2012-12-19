@@ -92,19 +92,19 @@ class Experiment(object):
         map(assign_cwd, self.executables)
 
     def __run_tasks(self):
-        exec_pause = 0.3
-        self.log("Starting the programs over ({0} seconds)".format(
-            len(self.executables) * exec_pause))
+        self.log("Starting the programs")
         for e in self.executables:
             try:
                 e.execute()
             except:
                 raise Exception("Executable failed: %s" % e)
-            time.sleep(exec_pause)
 
-        sleep_time = len(self.executables) / litmus_util.num_cpus()
-        self.log("Sleeping for %d seconds before release" % sleep_time)
-        time.sleep(sleep_time)
+        waiting = litmus_util.waiting_tasks()
+
+        if waiting:
+            sleep_time = len(self.executables) / litmus_util.num_cpus()
+            self.log("Sleeping for %d seconds before release" % sleep_time)
+            time.sleep(sleep_time)
 
         # Overhead tracer must be started right after release or overhead
         # measurements will be full of irrelevant records
@@ -112,8 +112,11 @@ class Experiment(object):
             self.log("Starting overhead trace")
             self.overhead_trace.start_tracing()
 
-        self.log("Releasing %d tasks" % len(self.executables))
-        released = litmus_util.release_tasks()
+        if waiting:
+            self.log("Releasing %d tasks" % len(self.executables))
+            released = litmus_util.release_tasks()
+        else:
+            released = len(self.executables)
 
         ret = True
         if released != len(self.executables):
