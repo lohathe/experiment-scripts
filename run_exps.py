@@ -160,10 +160,10 @@ def run_exp(name, schedule, scheduler, kernel, duration, work_dir, out_dir):
                 raise IOError("Invalid spin conf %s: %s" % (spin_conf, name))
             (spin, args) = (spin_conf[0], spin_conf[1])
 
-        if not conf.BINS[spin]:
-            raise IndexError("No knowledge of program %s: %s" % (spin, name))
+        # if not conf.BINS[spin]:
+        #     raise IndexError("No knowledge of program %s: %s" % (spin, name))
 
-        real_spin = conf.BINS[spin]
+        real_spin = get_executable(spin, "")
         real_args = ['-w'] + args.split() + [duration]
 
         if not lu.is_executable(real_spin):
