@@ -146,7 +146,7 @@ def extract_sched_data(result, data_dir, work_dir):
     bin_files   = conf.FILES['sched_data'].format(".*")
     output_file = "%s/out-st" % work_dir
 
-    bins = [f for f in os.listdir(data_dir) if re.match(bin_files, f)]
+    bins = ["%s/%s" % (data_dir,f) for f in os.listdir(data_dir) if re.match(bin_files, f)]
     if not len(bins):
         return
 

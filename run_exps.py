@@ -117,6 +117,7 @@ def load_experiment(sched_file, scheduler, duration, param_file, out_dir):
     # Cycles is saved here for accurate overhead calculations later
     out_params = dict(params.items() +
                       [(conf.PARAMS['sched'],  scheduler),
+                       (conf.PARAMS['tasks'],  len(schedule['spin'])),
                        (conf.PARAMS['dur'],    duration),
                        (conf.PARAMS['cycles'], lu.cpu_freq())])
     with open("%s/%s" % (out_dir, conf.DEFAULTS['params_file']), 'w') as f:

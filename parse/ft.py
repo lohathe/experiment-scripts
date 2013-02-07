@@ -47,12 +47,12 @@ def parse_overhead(result, overhead_bin, overhead, cycles, out_dir, err_file):
 
 def sort_ft(ft_file, err_file, out_dir):
     '''Create and return file with sorted overheads from @ft_file.'''
-    out_fname = "{}/{}".format(out_dir, FT_SORTED_NAME)
+    out_fname = "{}/{}".format("%s/%s" % (os.getcwd(), out_dir), FT_SORTED_NAME)
 
     # Sort happens in-place
     sh.copyfile(ft_file, out_fname)
     cmd = [conf.BINS['ftsort'], out_fname]
-    ret = subprocess.call(cmd, cwd=out_dir, stderr=err_file, stdout=err_file)
+    ret = subprocess.call(cmd, cwd="%s/%s" % (os.getcwd(), out_dir), stderr=err_file, stdout=err_file)
 
     if ret:
         raise Exception("Sort failed with command: %s" % " ".join(cmd))

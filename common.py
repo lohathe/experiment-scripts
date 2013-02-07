@@ -1,9 +1,14 @@
+import os
+import re
+import subprocess
 import sys
+
 from collections import defaultdict
 from textwrap import dedent
 
 def get_executable(prog, hint, optional=False):
-    import os
+    '''Search for @prog in system PATH. Print @hint if no binary is found.'''
+
     def is_exe(fpath):
         return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
 
@@ -19,11 +24,28 @@ def get_executable(prog, hint, optional=False):
 
     if not optional:
         sys.stderr.write("Cannot find executable '%s' in PATH. This is a part "
-                         "of '%s' which should be added to PATH to run." %
+                         "of '%s' which should be added to PATH to run.\n" %
                          (prog, hint))
         sys.exit(1)
     else:
         return None
+
+def get_config_option(option):
+    '''Search for @option in installed kernel config (if present).
+    Raise an IOError if the kernel config isn't found in /boot/.'''
+    uname = subprocess.check_output(["uname", "-r"])[-1]
+    fname = "/boot/config-%s" % uname
+
+    if os.path.exists(fname):
+        config_regex = "^CONFIG_{}=(?P<val>.*)$".format(option)
+        match = re.search(config_regex, open(fname, 'r').read())
+        if not match:
+            return None
+        else:
+            return match.group("val")
+
+    else:
+        raise IOError("No config file exists!")
 
 def recordtype(typename, field_names, default=0):
     ''' Mutable namedtuple. Recipe from George Sakkis of MIT.'''

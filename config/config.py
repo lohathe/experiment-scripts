@@ -17,18 +17,20 @@ BINS = {'rtspin'    : get_executable('rtspin', 'liblitmus'),
 FILES = {'ft_data'    : 'ft.bin',
          'linux_data' : 'trace.dat',
          'sched_data' : 'st-{}.bin',
-         'log_data'   : 'trace.slog',}
+         'log_data'   : 'trace.slog'}
 
 '''Default parameter names in params.py.'''
-PARAMS = {'sched'  : 'scheduler',
-          'dur'    : 'duration',
-          'kernel' : 'uname',
-          'cycles' : 'cpu-frequency'}
+# TODO: add check for config options
+PARAMS = {'sched'  : 'scheduler',     # Scheduler used by run_exps
+          'dur'    : 'duration',      # Duration of tests in run_exps
+          'kernel' : 'uname',         # Regex of required OS name in run_exps
+          'cycles' : 'cpu-frequency', # Frequency run_exps was run with
+          'tasks'  : 'tasks'          # Number of tasks
+          }
 
-'''Default values for program parameters.'''
+'''Default values for program options.'''
 DEFAULTS = {'params_file' : 'params.py',
             'sched_file'  : 'sched.py',
-            'exps_file'   : 'exps.py',
             'duration'    : 10,
             'spin'		  : 'rtspin',
             'cycles'      : 2000}

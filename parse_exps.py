@@ -18,6 +18,8 @@ def parse_args():
     # TODO: convert data-dir to proper option, clean 'dest' options
     parser = OptionParser("usage: %prog [options] [data_dir]...")
 
+    print("default to no params.py")
+
     parser.add_option('-o', '--out', dest='out',
                       help='file or directory for data output', default='parse-data')
     parser.add_option('-c', '--clean', action='store_true', default=False,
@@ -41,19 +43,14 @@ def get_exp_params(data_dir, col_map):
     if not os.path.isfile:
         raise Exception("No param file '%s' exists!" % param_file)
 
-    # Ignore 'magic' parameters used by these scripts
     params = load_params(param_file)
-    for ignored in conf.PARAMS.itervalues():
-        # With the exception of cycles which is used by overhead parsing
-        if ignored in params and ignored != conf.PARAMS['cycles']:
-            params.pop(ignored)
 
     # Store parameters in col_map, which will track which parameters change
     # across experiments
     for key, value in params.iteritems():
         col_map.try_add(key, value)
 
-    # Cycles must be present
+    # Cycles must be present for feather-trace measurement parsing
     if conf.PARAMS['cycles'] not in params:
         params[conf.PARAMS['cycles']] = conf.DEFAULTS['cycles']
 
@@ -72,10 +69,10 @@ def load_exps(exp_dirs, col_map, clean):
         # Used to store error output and debugging info
         work_dir = data_dir + "/tmp"
 
+        if os.path.exists(work_dir) and clean:
+            sh.rmtree(work_dir)
         if not os.path.exists(work_dir):
             os.mkdir(work_dir)
-        elif clean:
-            sh.rmtree(work_dir)
 
         params = get_exp_params(data_dir, col_map)
 

@@ -23,6 +23,15 @@ class ColMap(object):
                 key += (kv[col],)
         return key
 
+    def get_encoding(self, kv):
+        def escape(val):
+            return str(val).replace("_", "-").replace("=", "-")
+        vals = []
+        for key in self.col_list:
+            k, v = escape(key), escape(kv[key])
+            vals += ["%s=%s" % (k, v)]
+        return "_".join(vals)
+
     def __contains__(self, col):
         return col in self.rev_map
 
