@@ -28,6 +28,8 @@ class ColMap(object):
             return str(val).replace("_", "-").replace("=", "-")
         vals = []
         for key in self.col_list:
+            if key not in kv:
+                continue
             k, v = escape(key), escape(kv[key])
             vals += ["%s=%s" % (k, v)]
         return "_".join(vals)
@@ -116,8 +118,30 @@ class TupleTable(object):
         with open(out_map, 'wc') as map_file:
             pprint(result,stream=map_file, width=20)
 
-    def write_csvs(self, out_dir):
-        dir_map = DirMap(out_dir)
+
+    def __add_to_dirmap(self, dir_map, variable, kv, point):
+        value = kv.pop(variable)
+
+        for stat in point.get_stats():
+            summary = point[stat]
+
+            for summary_type in Type:
+                measurement = summary[summary_type]
+
+                for base_type in Type:
+                    if not base_type in measurement:
+                        continue
+                    # Ex: release/num_tasks/measured-max/avg/x=5.csv
+                    leaf = self.col_map.get_encoding(kv) + ".csv"
+                    path = [ stat, variable, "taskset-" + base_type, summary_type, leaf ]
+                    result = measurement[base_type]
+
+                    dir_map.add_value(path, (value, result))
+
+        kv[variable] = value
+
+    def to_dir_map(self):
+        dir_map = DirMap()
 
         for key, point in self.table.iteritems():
             kv = self.col_map.get_map(key)
@@ -128,12 +152,13 @@ class TupleTable(object):
                 try:
                     float(val)
                 except:
-                    # Only vary numbers. Otherwise, just have seperate lines
+                    # Only vary numbers. Otherwise, just have seperate files
                     continue
 
-                kv.pop(col)
-                dir_map.add_point(col, val, kv, point)
-                kv[col] = val
+                self.__add_to_dirmap(dir_map, col, kv, point)
 
         dir_map.reduce()
-        dir_map.write()
+        return dir_map
+
+    def from_dir_map(dir_map):
+        pass

@@ -127,7 +127,8 @@ def main():
         result_table.write_map(opts.out)
     else:
         # Write out csv directories for all variable params
-        result_table.write_csvs(opts.out)
+        dir_map = result_table.to_dir_map()
+        dir_map.write(opts.out)
 
 if __name__ == '__main__':
     main()

@@ -1,7 +1,6 @@
 import os
 
 from collections import defaultdict
-from point import Type
 
 class TreeNode(object):
     def __init__(self, parent = None):
@@ -16,38 +15,15 @@ class DirMap(object):
             val_strs += ["%s=%s" % (key, vals[key])]
         return "%s.csv" % ("_".join(val_strs))
 
-    def __init__(self, out_dir):
+    def __init__(self):
         self.root = TreeNode(None)
-        self.out_dir = out_dir
         self.values  = []
 
-    def debug_update_node(self, path, keys, value):
-        self.__update_node(path, keys, value)
-
-    def __update_node(self, path, keys, value):
+    def add_value(self, path, value):
         node = self.root
-
-        path += [ self.to_csv(keys) ]
         for p in path:
             node = node.children[p]
-
         node.values += [value]
-
-    def add_point(self, vary, vary_value, keys, point):
-        for stat in point.get_stats():
-            summary = point[stat]
-
-            for summary_type in Type:
-                measurement = summary[summary_type]
-
-                for base_type in Type:
-                    if not base_type in measurement:
-                        continue
-                    # Ex: wcet/avg/max/vary-type/other-stuff.csv
-                    path  = [ stat, summary_type, base_type, "vary-%s" % vary ]
-                    result = measurement[base_type]
-
-                    self.__update_node(path, keys, (vary_value, result))
 
     def reduce(self):
         def reduce2(node):
@@ -62,7 +38,7 @@ class DirMap(object):
 
         reduce2(self.root)
 
-    def write(self):
+    def write(self, out_dir):
         def write2(path, node):
             out_path = "/".join(path)
             if node.values:
@@ -78,8 +54,7 @@ class DirMap(object):
                 write2(path, child)
                 path.pop()
 
-
-        write2([self.out_dir], self.root)
+        write2([out_dir], self.root)
 
 
     def __str__(self):
@@ -92,4 +67,4 @@ class DirMap(object):
                 ret += "%s/%s\n" % (header, key)
                 ret += str2(child, level + 1)
             return ret
-        return "%s\n%s" % (self.out_dir, str2(self.root, 1))
+        return str2(self.root, 1)
