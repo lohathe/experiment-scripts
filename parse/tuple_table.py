@@ -1,61 +1,50 @@
-from collections import defaultdict
+from Cheetah.Template import Template
+from collections import defaultdict,namedtuple
 from point import SummaryPoint,Type
 from dir_map import DirMap
+from col_map import ColMap,ColMapBuilder
+
 
 from pprint import pprint
 
 class TupleTable(object):
-    def __init__(self, col_map):
+    def __init__(self, col_map, default=lambda:[]):
         self.col_map = col_map
-        self.table = defaultdict(lambda: [])
-        self.reduced = False
-
-    # TODO: rename, make exp agnostic, extend for exps
-    def add_exp(self, kv, point):
-        key = self.col_map.get_key(kv)
-        self.table[key] += [point]
+        self.table = defaultdict(default)
 
     def col_map(self):
         return self.col_map
 
-    def get_exps(self, kv):
+    def __getitem__(self, kv):
         key = self.col_map.get_key(kv)
         return self.table[key]
+
+    def __setitem__(self, kv, value):
+        key = self.col_map.get_key(kv)
+        self.table[key]
 
     def __contains__(self, kv):
         key = self.col_map.get_key(kv)
         return key in self.table
 
     def reduce(self):
-        if self.reduced:
-            raise Exception("cannot reduce twice!")
-        self.reduced = True
-        for key, values in self.table.iteritems():
-            self.table[key] = SummaryPoint(values[0].id, values)
+        reduced = ReducedTupleTable(self.col_map)
+        for key, value in self.table.iteritems():
+            if type(value) == type([]):
+                value = SummaryPoint(value[0].id, value)
+            reduced.table[key] = value
+        return reduced
 
-    def write_map(self, out_map):
-        if not self.reduced:
-            raise Exception("must reduce table to write map!")
+    def __str__(self):
+        s = str(Template("""ColMap: $col_map
+        #for $item in $table
+        $item :$table[$item]
+        #end for""", searchList=vars(self)))
+        return s
 
-        rows = {}
-
-        for key, point in self.table.iteritems():
-            row = {}
-            for name,measurement in point:
-                name = name.lower().replace('_','-')
-                row[name]={}
-                for base_type in Type:
-                    type_key = str(base_type).lower()
-                    if base_type in measurement[Type.Avg]:
-                        value = measurement[Type.Avg][base_type]
-                        row[name][type_key] = value
-            rows[key] = row
-
-        result = {'columns': self.col_map.columns(), 'rows':rows}
-
-        with open(out_map, 'wc') as map_file:
-            pprint(result,stream=map_file, width=20)
-
+class ReducedTupleTable(TupleTable):
+    def __init__(self, col_map):
+        super(ReducedTupleTable, self).__init__(col_map, default=SummaryPoint)
 
     def __add_to_dirmap(self, dir_map, variable, kv, point):
         value = kv.pop(variable)
@@ -71,8 +60,7 @@ class TupleTable(object):
                         continue
                     # Ex: release/num_tasks/measured-max/avg/x=5.csv
                     leaf = self.col_map.encode(kv) + ".csv"
-                    path = [ stat, variable, "taskset-" + base_type,
-                             summary_type, leaf ]
+                    path = [ stat, variable, base_type, summary_type, leaf ]
                     result = measurement[base_type]
 
                     dir_map.add_values(path, [(value, result)])
@@ -96,5 +84,61 @@ class TupleTable(object):
 
                 self.__add_to_dirmap(dir_map, col, kv, point)
 
-        dir_map.reduce()
+        dir_map.remove_childless()
+        print("wrote: %s" % self)
         return dir_map
+
+    @staticmethod
+    def from_dir_map(dir_map):
+        Leaf = namedtuple('Leaf', ['stat', 'variable', 'base',
+                                   'summary', 'config', 'values'])
+        def leafs():
+            for path, values in dir_map.leafs():
+                stat, variable, base_type, summary_type, leaf = path
+
+                config_str = leaf[:leaf.index('.csv')]
+                config = ColMap.decode(config_str)
+
+                yield Leaf(stat, variable, base_type,
+                           summary_type, config, values)
+
+        builder = ColMapBuilder()
+
+        # Gather all possible config values for ColMap
+        for leaf_deets in leafs():
+            for k, v in leaf_deets.config.iteritems():
+                builder.try_add(k, v)
+
+        col_map = builder.build()
+        table = ReducedTupleTable(col_map)
+
+        # Set values at each point
+        for leaf in leafs():
+            for (x, y) in leaf.values:
+                leaf.config[leaf.variable] = str(x)
+                summary = table[leaf.config][leaf.stat]
+                summary[leaf.summary][leaf.base] = y
+
+        print("read: %s" % table)
+        return table
+
+    def write_map(self, out_map):
+        rows = {}
+
+        for key, point in self.table.iteritems():
+            row = {}
+            for name,measurement in point:
+                name = name.lower().replace('_','-')
+                row[name]={}
+                for base_type in Type:
+                    type_key = str(base_type).lower()
+                    if base_type in measurement[Type.Avg]:
+                        value = measurement[Type.Avg][base_type]
+                        row[name][type_key] = value
+            rows[key] = row
+
+        result = {'columns': self.col_map.columns(), 'rows':rows}
+
+        with open(out_map, 'wc') as map_file:
+            pprint(result,stream=map_file, width=20)
+

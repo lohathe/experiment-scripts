@@ -26,9 +26,9 @@ def dict_str(adict, sep = "\n"):
     return sep.join([("%" + str(size) + "s: %9s") % (k, num_str(v)) for (k,v) in sorted(adict.iteritems())])
 
 class Measurement(object):
-    def __init__(self, id = None, kv = {}):
+    def __init__(self, id = None, kv = {}, default=list):
         self.id = id
-        self.stats = {}
+        self.stats = defaultdict(default)
         for k, v in kv.iteritems():
             self[k] = v
 
@@ -55,20 +55,24 @@ class Measurement(object):
         self.__check_type(type)
         return type in self.stats
 
-    def __setitem__(self, type, value):
-        self.__check_type(type)
-        self.stats[type] = value
+    def __setitem__(self, t, value):
+        self.__check_type(t)
+        # Numpy returns single memmapped values which can't be pickled
+        # Convert them to floats which can be
+        if type(value) is np.memmap:
+            value = float(value)
+        self.stats[t] = value
 
     def __str__(self):
         return "%s" % dict_str(self.stats, " ")
 
-
 class Summary(Measurement):
-    def __init__(self, id, measures, typemap = default_typemap):
-        super(Summary, self).__init__(id)
+    def __init__(self, id="", measures=[], typemap = default_typemap):
+        super(Summary, self).__init__(id, default=Measurement)
 
-        self.__check_types(measures, typemap)
-        self.__summarize(measures, typemap)
+        if measures:
+            self.__check_types(measures, typemap)
+            self.__summarize(measures, typemap)
 
     def __check_types(self, measures, typemap):
         required_types = self.__get_required(typemap)
@@ -100,8 +104,8 @@ class Summary(Measurement):
         return required
 
 class ExpPoint(object):
-    def __init__(self, id = "", init = {}):
-        self.stats = {}
+    def __init__(self, id = "", init = {}, default=Measurement):
+        self.stats = defaultdict(default)
         for type, value in init.iteritems():
             self[type] = value
         self.id = id
@@ -124,14 +128,17 @@ class ExpPoint(object):
         self.stats[type] = value
 
     def __str__(self):
-        return "<ExpPoint-%s>\n%s" % (self.id, dict_str(self.stats))
+        # return "<ExpPoint-%s>\n%s" % (self.id, dict_str(self.stats))
+        return "<ExpPoint-%s>" % (self.id)
 
     def get_stats(self):
         return self.stats.keys()
 
+
 class SummaryPoint(ExpPoint):
-    def __init__(self, id, points, typemap = default_typemap):
-        super(SummaryPoint,self).__init__("Summary-%s" % id)
+    def __init__(self, id="", points=[], typemap = default_typemap):
+        super(SummaryPoint,self).__init__("Summary-%s" % id,
+                                          default=Summary)
 
         grouped = defaultdict(lambda : [])
 

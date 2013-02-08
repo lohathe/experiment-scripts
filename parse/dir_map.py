@@ -3,18 +3,16 @@ import numpy as np
 
 from collections import defaultdict
 
-class TreeNode(object):
-    def __init__(self, parent = None):
-        self.parent = parent
-        self.children = defaultdict(lambda : TreeNode(self))
-        self.values = []
-
 class DirMap(object):
-    def __init__(self, in_dir = None):
-        self.root = TreeNode(None)
+    class Node(object):
+        def __init__(self, parent = None):
+            self.parent = parent
+            self.children = defaultdict(lambda : DirMap.Node(self))
+            self.values = []
+
+    def __init__(self):
+        self.root = DirMap.Node(None)
         self.values  = []
-        if in_dir:
-            self.__read(in_dir)
 
     def add_values(self, path, values):
         node = self.root
@@ -22,18 +20,18 @@ class DirMap(object):
             node = node.children[p]
         node.values += values
 
-    def reduce(self):
-        def reduce2(node):
+    def remove_childless(self):
+        def remove_childless2(node):
             for key in node.children.keys():
                 child = node.children[key]
-                reduce2(child)
+                remove_childless2(child)
                 if not (child.children or child.values):
                     node.children.pop(key)
 
             if len(node.values) == 1:
                 node.values = []
 
-        reduce2(self.root)
+        remove_childless2(self.root)
 
     def write(self, out_dir):
         def write2(path, node):
@@ -42,6 +40,7 @@ class DirMap(object):
                 # Leaf
                 with open("/".join(path), "w") as f:
                     arr = [",".join([str(b) for b in n]) for n in node.values]
+                    arr = sorted(arr, key=lambda x: x[0])
                     f.write("\n".join(arr) + "\n")
             elif not os.path.isdir(out_path):
                 os.mkdir(out_path)
@@ -52,6 +51,21 @@ class DirMap(object):
                 path.pop()
 
         write2([out_dir], self.root)
+
+
+    def leafs(self):
+        def leafs2(path, node):
+            if node.children:
+                for child_name, child_node in node.children.iteritems():
+                    path += [child_name]
+                    for leaf in leafs2(path, child_node):
+                        yield leaf
+                    path.pop()
+            elif path:
+                yield (path, node.values)
+
+        for leaf in leafs2([], self.root):
+            yield leaf
 
     @staticmethod
     def read(in_dir):
@@ -72,6 +86,7 @@ class DirMap(object):
 
                 stripped = path if path.find(in_dir) else path[len(in_dir):]
                 path_arr = stripped.split("/")
+                path_arr = filter(lambda x: x != '', path_arr)
 
                 dir_map.add_values(path_arr, values)
 

@@ -5,14 +5,16 @@ import config.config as conf
 import os
 import parse.ft as ft
 import parse.sched as st
+import pickle
 import shutil as sh
 import sys
 
 from collections import namedtuple
 from common import load_params
 from optparse import OptionParser
+from parse.dir_map import DirMap
 from parse.point import ExpPoint
-from parse.tuple_table import TupleTable
+from parse.tuple_table import TupleTable,ReducedTupleTable
 from parse.col_map import ColMapBuilder
 
 
@@ -83,6 +85,29 @@ def load_exps(exp_dirs, cm_builder, clean):
 
     return exps
 
+def parse_exp(exp, force):
+    result_file = exp.work_dir + "/exp_point.pkl"
+    should_load = not force and os.path.exists(result_file)
+    mode = 'r' if should_load else 'w'
+
+    with open(result_file, mode + 'b') as f:
+        if should_load:
+            # No need to go through this work twice
+            result = pickle.load(f)
+        else:
+            result = ExpPoint(exp.path)
+            cycles = exp.params[conf.PARAMS['cycles']]
+
+            # Write overheads into result
+            ft.extract_ft_data(result, exp.path, exp.work_dir, cycles)
+
+            # Write scheduling statistics into result
+            st.extract_sched_data(result, exp.path, exp.work_dir)
+
+            pickle.dump(result, f)
+
+    return result
+
 def main():
     opts, args = parse_args()
 
@@ -102,28 +127,19 @@ def main():
 
     sys.stderr.write("Parsing data...\n")
     for i,exp in enumerate(exps):
-        result = ExpPoint(exp.path)
-        cycles = exp.params[conf.PARAMS['cycles']]
-
-        # Write overheads into result
-        ft.extract_ft_data(result, exp.path, exp.work_dir, cycles)
-
-        # Write scheduling statistics into result
-        st.extract_sched_data(result, exp.path, exp.work_dir)
-
+        result = parse_exp(exp, opts.force)
         if opts.verbose:
             print(result)
         else:
             sys.stderr.write('\r {0:.2%}'.format(float(i)/len(exps)))
-
-        result_table.add_exp(exp.params, result)
+        result_table[exp.params] += [result]
 
     sys.stderr.write('\n')
 
     if opts.force and os.path.exists(opts.out):
         sh.rmtree(opts.out)
 
-    result_table.reduce()
+    result_table = result_table.reduce()
 
     sys.stderr.write("Writing result...\n")
     if opts.write_map:

@@ -3,5 +3,3 @@ class Enum(frozenset):
         if name in self:
             return name
         raise AttributeError
-
-    
