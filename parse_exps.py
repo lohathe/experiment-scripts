@@ -11,9 +11,9 @@ import sys
 from collections import namedtuple
 from common import load_params
 from optparse import OptionParser
-from parse.dir_map import DirMap
 from parse.point import ExpPoint
-from parse.tuple_table import ColMap,TupleTable
+from parse.tuple_table import TupleTable
+from parse.col_map import ColMapBuilder
 
 
 def parse_args():
@@ -41,17 +41,17 @@ def parse_args():
 
 ExpData = namedtuple('ExpData', ['path', 'params', 'work_dir'])
 
-def get_exp_params(data_dir, col_map):
+def get_exp_params(data_dir, cm_builder):
     param_file = "%s/%s" % (data_dir, conf.DEFAULTS['params_file'])
     if not os.path.isfile:
         raise Exception("No param file '%s' exists!" % param_file)
 
     params = load_params(param_file)
 
-    # Store parameters in col_map, which will track which parameters change
+    # Store parameters in cm_builder, which will track which parameters change
     # across experiments
     for key, value in params.iteritems():
-        col_map.try_add(key, value)
+        cm_builder.try_add(key, value)
 
     # Cycles must be present for feather-trace measurement parsing
     if conf.PARAMS['cycles'] not in params:
@@ -60,7 +60,7 @@ def get_exp_params(data_dir, col_map):
     return params
 
 
-def load_exps(exp_dirs, col_map, clean):
+def load_exps(exp_dirs, cm_builder, clean):
     exps = []
 
     sys.stderr.write("Loading experiments...\n")
@@ -77,7 +77,7 @@ def load_exps(exp_dirs, col_map, clean):
         if not os.path.exists(work_dir):
             os.mkdir(work_dir)
 
-        params = get_exp_params(data_dir, col_map)
+        params = get_exp_params(data_dir, cm_builder)
 
         exps += [ ExpData(data_dir, params, work_dir) ]
 
@@ -88,15 +88,16 @@ def main():
 
     args = args or [os.getcwd()]
 
-    # Load exp parameters into col_map
-    col_map = ColMap()
-    exps = load_exps(args, col_map, opts.force)
+    # Load exp parameters into a ColMap
+    builder = ColMapBuilder()
+    exps = load_exps(args, builder, opts.force)
 
     # Don't track changes in ignored parameters
     if opts.ignore:
         for param in opts.ignore.split(","):
-            col_map.try_remove(param)
+            builder.try_remove(param)
 
+    col_map = builder.build()
     result_table = TupleTable(col_map)
 
     sys.stderr.write("Parsing data...\n")

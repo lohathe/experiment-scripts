@@ -3,7 +3,7 @@ from collections import namedtuple
 from common import get_config_option
 from config.config import DEFAULTS
 from gen.dp import DesignPointGenerator
-from parse.tuple_table import ColMap
+from parse.col_map import ColMapBuilder
 
 import gen.rv as rv
 import os
@@ -185,13 +185,14 @@ class BaseGenerator(object):
     def create_exps(self, out_dir, force):
         '''Create experiments for all possible combinations of params in
         @out_dir. Overwrite existing files if @force is True.'''
-        col_map = ColMap()
+        builder = ColMapBuilder()
 
         # Track changing values so only relevant parameters are included
         # in directory names
         for dp in DesignPointGenerator(self.params):
             for k, v in dp.iteritems():
-                col_map.try_add(k, v)
+                builder.try_add(k, v)
+        col_map = builder.build()
 
         for dp in DesignPointGenerator(self.params):
             dir_leaf = "sched=%s_%s" % (self.name, col_map.get_encoding(dp))

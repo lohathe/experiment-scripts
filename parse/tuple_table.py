@@ -4,68 +4,6 @@ from dir_map import DirMap
 
 from pprint import pprint
 
-class ColMap(object):
-    def __init__(self):
-        self.rev_map = {}
-        self.value_map = {}
-        self.col_list = []
-
-    def columns(self):
-        return self.col_list
-
-    def get_key(self, kv):
-        key = ()
-
-        for col in self.col_list:
-            if col not in kv:
-                key += (None,)
-            else:
-                key += (kv[col],)
-        return key
-
-    def get_encoding(self, kv):
-        def escape(val):
-            return str(val).replace("_", "-").replace("=", "-")
-        vals = []
-        for key in self.col_list:
-            if key not in kv:
-                continue
-            k, v = escape(key), escape(kv[key])
-            vals += ["%s=%s" % (k, v)]
-        return "_".join(vals)
-
-    def __contains__(self, col):
-        return col in self.rev_map
-
-    def get_map(self, tuple):
-        map = {}
-        for i in range(0, len(tuple)):
-            map[self.col_list[i]] = tuple[i]
-        return map
-
-    def force_add(self, column):
-        self.rev_map[column] = len(self.col_list)
-        self.col_list += [column]
-
-    def try_add(self, column, value):
-        if column not in self.rev_map:
-            if column not in self.value_map:
-                self.value_map[column] = value
-            elif value != self.value_map[column]:
-                self.force_add(column)
-                del(self.value_map[column])
-
-    def try_remove(self, column):
-        if column in self.rev_map:
-            idx = self.rev_map[column]
-            for value in self.col_list[idx+1:]:
-                self.rev_map[value] -= 1
-            del(self.col_list[self.rev_map[column]])
-            del(self.rev_map[column])
-
-    def __str__(self):
-        return "<ColMap>%s" % (self.rev_map)
-
 class TupleTable(object):
     def __init__(self, col_map):
         self.col_map = col_map
@@ -132,8 +70,9 @@ class TupleTable(object):
                     if not base_type in measurement:
                         continue
                     # Ex: release/num_tasks/measured-max/avg/x=5.csv
-                    leaf = self.col_map.get_encoding(kv) + ".csv"
-                    path = [ stat, variable, "taskset-" + base_type, summary_type, leaf ]
+                    leaf = self.col_map.encode(kv) + ".csv"
+                    path = [ stat, variable, "taskset-" + base_type,
+                             summary_type, leaf ]
                     result = measurement[base_type]
 
                     dir_map.add_values(path, [(value, result)])
@@ -144,7 +83,7 @@ class TupleTable(object):
         dir_map = DirMap()
 
         for key, point in self.table.iteritems():
-            kv = self.col_map.get_map(key)
+            kv = self.col_map.get_kv(key)
 
             for col in self.col_map.columns():
                 val = kv[col]
@@ -159,6 +98,3 @@ class TupleTable(object):
 
         dir_map.reduce()
         return dir_map
-
-    def from_dir_map(dir_map):
-        pass

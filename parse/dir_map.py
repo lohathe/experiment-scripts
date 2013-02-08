@@ -53,7 +53,9 @@ class DirMap(object):
 
         write2([out_dir], self.root)
 
-    def __read(self, in_dir):
+    @staticmethod
+    def read(in_dir):
+        dir_map = DirMap()
         if not os.path.exists(in_dir):
             raise ValueError("Can't load from nonexistent path : %s" % in_dir)
 
@@ -71,9 +73,11 @@ class DirMap(object):
                 stripped = path if path.find(in_dir) else path[len(in_dir):]
                 path_arr = stripped.split("/")
 
-                self.add_values(path_arr, values)
+                dir_map.add_values(path_arr, values)
 
         read2(in_dir)
+
+        return dir_map
 
     def __str__(self):
         def str2(node, level):
