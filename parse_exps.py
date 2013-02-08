@@ -11,14 +11,17 @@ import sys
 from collections import namedtuple
 from common import load_params
 from optparse import OptionParser
+from parse.dir_map import DirMap
 from parse.point import ExpPoint
 from parse.tuple_table import ColMap,TupleTable
+
 
 def parse_args():
     # TODO: convert data-dir to proper option, clean 'dest' options
     parser = OptionParser("usage: %prog [options] [data_dir]...")
 
     print("default to no params.py")
+    print("save measurements in temp directory for faster reloading")
 
     parser.add_option('-o', '--out', dest='out',
                       help='file or directory for data output', default='parse-data')

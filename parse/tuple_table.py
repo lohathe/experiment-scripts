@@ -136,7 +136,7 @@ class TupleTable(object):
                     path = [ stat, variable, "taskset-" + base_type, summary_type, leaf ]
                     result = measurement[base_type]
 
-                    dir_map.add_value(path, (value, result))
+                    dir_map.add_values(path, [(value, result)])
 
         kv[variable] = value
 

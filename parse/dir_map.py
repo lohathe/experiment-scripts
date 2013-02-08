@@ -1,4 +1,5 @@
 import os
+import numpy as np
 
 from collections import defaultdict
 
@@ -9,21 +10,17 @@ class TreeNode(object):
         self.values = []
 
 class DirMap(object):
-    def to_csv(self, vals):
-        val_strs = []
-        for key in sorted(vals.keys()):
-            val_strs += ["%s=%s" % (key, vals[key])]
-        return "%s.csv" % ("_".join(val_strs))
-
-    def __init__(self):
+    def __init__(self, in_dir = None):
         self.root = TreeNode(None)
         self.values  = []
+        if in_dir:
+            self.__read(in_dir)
 
-    def add_value(self, path, value):
+    def add_values(self, path, values):
         node = self.root
         for p in path:
             node = node.children[p]
-        node.values += [value]
+        node.values += values
 
     def reduce(self):
         def reduce2(node):
@@ -56,6 +53,27 @@ class DirMap(object):
 
         write2([out_dir], self.root)
 
+    def __read(self, in_dir):
+        if not os.path.exists(in_dir):
+            raise ValueError("Can't load from nonexistent path : %s" % in_dir)
+
+        def read2(path):
+            if os.path.isdir(path):
+                map(lambda x : read2(path+"/"+x), os.listdir(path))
+            else:
+                with open(path, 'rb') as f:
+                    data = np.loadtxt(f, delimiter=",")
+
+                # Convert to tuples of ints if possible, else floats
+                values = [map(lambda a:a if a%1 else int(a), t) for t in data]
+                values = map(tuple, values)
+
+                stripped = path if path.find(in_dir) else path[len(in_dir):]
+                path_arr = stripped.split("/")
+
+                self.add_values(path_arr, values)
+
+        read2(in_dir)
 
     def __str__(self):
         def str2(node, level):
