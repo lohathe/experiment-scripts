@@ -6,9 +6,9 @@ class ColMapBuilder(object):
 
     def build(self):
         columns = sorted(self.value_map.keys(),
-                         key=lambda c: (len(self.value_map[c]), c))
+                         key=lambda c: (-len(self.value_map[c]), c))
         col_list = filter(lambda c : len(self.value_map[c]) > 1, columns)
-        return ColMap(col_list)
+        return ColMap(col_list, self.value_map)
 
     def try_add(self, column, value):
         self.value_map[column].add( value )
@@ -17,15 +17,26 @@ class ColMapBuilder(object):
         del(self.value_map[column])
 
 class ColMap(object):
-    def __init__(self, col_list):
+    def __init__(self, col_list, values = None):
         self.col_list = col_list
         self.rev_map = {}
+        self.values = values
+
+        self.minimums = []
+        for c in col_list:
+            end = 1
+            while c[:end] in self.minimums:
+                end += 1
+            self.minimums += [c[:end]]
 
         for i, col in enumerate(col_list):
             self.rev_map[col] = i
 
     def columns(self):
         return self.col_list
+
+    def get_values(self):
+        return self.values
 
     def get_key(self, kv):
         '''Convert a key-value dict into an ordered tuple of values.'''
@@ -46,8 +57,7 @@ class ColMap(object):
             kv[self.col_list[i]] = key[i]
         return kv
 
-
-    def encode(self, kv):
+    def encode(self, kv, minimum=False):
         '''Converted a dict into a string with items sorted according to
         the ColMap key order.'''
         def escape(val):
@@ -55,13 +65,23 @@ class ColMap(object):
 
         vals = []
 
-        for key in self.col_list:
+        if minimum:
+            format = "%s:%s"
+            join = ", "
+        else:
+            format = "%s=%s"
+            join = "_"
+
+        reverse = list(self.col_list)
+        reverse.reverse()
+        for key in reverse:
             if key not in kv:
                 continue
-            k, v = escape(key), escape(kv[key])
-            vals += ["%s=%s" % (k, v)]
+            display = key if not minimum else self.minimums[self.rev_map[key]]
+            k, v = escape(display), escape(kv[key])
+            vals += [format % (k, v)]
 
-        return "_".join(vals)
+        return join.join(vals)
 
     @staticmethod
     def decode(string):

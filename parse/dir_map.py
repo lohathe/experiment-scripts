@@ -1,5 +1,6 @@
-import os
 import numpy as np
+import os
+import re
 
 from collections import defaultdict
 
@@ -9,6 +10,29 @@ class DirMap(object):
             self.parent = parent
             self.children = defaultdict(lambda : DirMap.Node(self))
             self.values = []
+
+        def heir(self, generation=1):
+            def heir2(node, generation):
+                if not generation:
+                    return node
+                elif not node.children:
+                    return None
+                else:
+                    next_heir = node.children.values()[0]
+                    return next_heir.heir(generation - 1)
+            return heir2(self, generation)
+
+        def leafs(self, path=[], offset=0):
+            path = list(path)
+            check_node = self.heir(offset)
+            if check_node and check_node.children:
+                for child_name, child_node in self.children.iteritems():
+                    path += [child_name]
+                    for leaf in child_node.leafs(path, offset):
+                        yield leaf
+                    path.pop()
+            else:
+                yield (path, self)
 
     def __init__(self):
         self.root = DirMap.Node(None)
@@ -22,8 +46,7 @@ class DirMap(object):
 
     def remove_childless(self):
         def remove_childless2(node):
-            for key in node.children.keys():
-                child = node.children[key]
+            for key, child in node:
                 remove_childless2(child)
                 if not (child.children or child.values):
                     node.children.pop(key)
@@ -52,19 +75,8 @@ class DirMap(object):
 
         write2([out_dir], self.root)
 
-
-    def leafs(self):
-        def leafs2(path, node):
-            if node.children:
-                for child_name, child_node in node.children.iteritems():
-                    path += [child_name]
-                    for leaf in leafs2(path, child_node):
-                        yield leaf
-                    path.pop()
-            elif path:
-                yield (path, node.values)
-
-        for leaf in leafs2([], self.root):
+    def leafs(self, offset=0):
+        for leaf in self.root.leafs([], offset):
             yield leaf
 
     @staticmethod
@@ -77,6 +89,9 @@ class DirMap(object):
             if os.path.isdir(path):
                 map(lambda x : read2(path+"/"+x), os.listdir(path))
             else:
+                if not re.match(r'.*\.csv', path):
+                    return
+
                 with open(path, 'rb') as f:
                     data = np.loadtxt(f, delimiter=",")
 

@@ -2,76 +2,14 @@
 from __future__ import print_function
 
 import os
-import re
-import plot
 import shutil as sh
-
-from collections import defaultdict
+import sys
 from optparse import OptionParser
-from gnuplot import Plot, curve
-from random import randrange
-
-class StyleMaker(object):
-    LINE_WIDTH = 1.5
-    POINT_SIZE = 0.6
-    BEST_COLORS = [
-            '#ff0000', # red
-            '#000001', # black
-            '#0000ff', # blue
-            '#be00c4', # purple
-            '#ffd700', # yellow
-            ]
-
-    def __init__(csvs):
-        self.main_key, self.col_map = __find_columns(csvs)
-        self.cur_style = 1
-
-        # Use this for least-common varying attribute
-        self.main_map = {}
-        # Everything else is a color
-        self.color_map = TupleTable(self.col_map)
-
-    def __find_columns(csvs):
-        vals = defaultdict(lambda:set)
-
-        for csv in csvs:
-            to_decode = os.path.splitext(csv_file)[0]
-            params = plot.decode(to_decode)
-            for k,v in params.iteritems:
-                vals[k].add(v)
-
-        try:
-            main_key = min([(k,v) for (k,v) in thing.iteritems() if len(v) > 1],
-                key=operator.itemgetter(1))[0]
-        except ValueError:
-            main_key = None
-
-        col_map = ColMap()
-        for k,v in vals.iterkeys():
-            if k == self.main_key: continue
-            for i in v:
-                self.col_map.try_add(k, i)
-        return (main_key, col_map)
-
-    def __rand_color():
-        return "#%s" % "".join([hex(randrange(0, 255))[2:] for i in range(3)])
-
-    def get_style(csv):
-        to_decode = os.path.splitext(csv_file)[0]
-        params = plot.decode(to_decode)
-
-        if kv not in self.color_map:
-            color = best.pop() if BEST_COLORS else __rand_color()
-            self.color_map.add_exp(params, color)
-
-        if self.main_key in params:
-            val = params[self.main_key]
-            if val not in self.main_map:
-                self.main_map[val] = self.cur_style
-                self.cur_style += 1
-            style = self.main_map[val]
-        else:
-            style = 1
+from parse.dir_map import DirMap
+from parse.tuple_table import ReducedTupleTable
+from parse.col_map import ColMap
+from collections import namedtuple,defaultdict
+import matplotlib.pyplot as plot
 
 def parse_args():
     parser = OptionParser("usage: %prog [options] [csv_dir]...")
@@ -83,54 +21,138 @@ def parse_args():
 
     return parser.parse_args()
 
-def get_label(kv):
-    label = []
-    for key, value in kv.iteritems():
-        label += ["%s=%s" % (key.capitalize(), value)]
-    return ", ".join(label)
 
-def add_line(plot, csv_file):
-    to_decode = os.path.splitext(csv_file)[0]
-    params = plot.decode(to_decode)
+ExpDetails = namedtuple('ExpDetails', ['variable', 'value', 'title', 'out'])
+OUT_FORMAT = 'pdf'
 
-def get_stat(path, name):
-    full  = os.path.abspath(path)
-    rstr  = r"(?P<STAT>[^/]+)/((max|min|var|avg)/)*(%s/?)?$" % name
-    regex = re.compile(rstr, re.I | re.M)
-    match = regex.search(full)
-    return match.group("STAT")
+def get_details(path):
+    out = "_".join(path) if path else "plot"
 
-def plot_exp(name, data_dir, out_dir):
-    p = Plot()
-    p.format = 'pdf'
-    p.output = "%s/%s.pdf" % (out_dir, name)
-    p.xlabel = name.replace("vary-", "")
-    p.ylabel = get_stat(data_dir, name)
-    p.font   = 'Helvetica'
-    p.dashed_lines  = True
-    p.enhanced_text = True
-    p.size          = ('5.0cm', '5.0cm')
-    p.font_size     = '6pt'
-    p.key           = 'on bmargin center horizontal'
+    value = path.pop() if path else None
+    variable = path.pop() if path else None
 
-    csvs = [f for f in os.listdir(data_dir) if re.match("*.csv", f)]
-    col_map = get_col_map(csvs)
+    title  = value.capitalize() if value else ""
+    title += " by %s" % variable if variable else ""
+    title += " (%s)" % (", ".join(path)) if path else ""
 
+    return ExpDetails(variable, value, title, out)
+
+
+
+class StyleMap(object):
+    COLORS  = list('bgrcmyk')
+    LINES   = ['-', ':', '--']
+    MARKERS = list('.,ov^<>1234sp*hH+xDd|_')
+    ORDER   = [MARKERS, COLORS, LINES]
+    DEFAULT = ["k", "-", "k"]
+
+    def __init__(self, col_list, col_values):
+        self.prop_map = dict(zip(col_list, StyleMap.ORDER))
+
+        # Store 1 style per value
+        self.value_map = defaultdict(dict)
+        for column, styles in self.prop_map.iteritems():
+            value_styles = self.value_map[column]
+            for value in sorted(col_values[column]):
+                value_styles[value] = styles.pop(0)
+                styles += [value_styles[value]]
+
+    def get_style(self, kv):
+        style = ''
+        for k,v in kv.iteritems():
+            if k in self.value_map:
+                style += self.value_map[k][v]
+        return style
+
+    def get_key(self):
+        key = []
+        for column, properties in self.prop_map.iteritems():
+            idx = StyleMap.ORDER.index(properties)
+            prop_string = StyleMap.DEFAULT[idx] + "%s"
+            for value, prop in self.value_map[column].iteritems():
+                style = plot.plot([],[], prop_string%prop)[0]
+                key += [(style, "%s:%s" % (column, value))]
+        return sorted(key, key=lambda x:x[1])
+
+def plot_by_variable(dir_map, col_map, out_dir, force):
+    num_plots = 0
+    id = 0
+    for _,_ in dir_map.leafs(1):
+        num_plots += 1
+    sys.stderr.write("Plotting by variable...")
+
+    for plot_path, plot_node in dir_map.leafs(1):
+        id += 1
+        details = get_details(plot_path)
+        out_fname = "%s/%s.%s" % (out_dir, details.out, OUT_FORMAT)
+        if os.path.exists(out_fname) and not force:
+            continue
+
+        # Kinda bad...
+        first_csv = plot_node.children.keys()[0]
+        first_config = ColMap.decode(first_csv[:first_csv.index('.csv')])
+        columns = filter(lambda c: c in first_config, col_map.columns())
+
+        style_map = StyleMap(columns, col_map.get_values())
+
+        figure = plot.figure()
+        axes = figure.add_subplot(111)
+
+        for line_path, line_node in plot_node.children.iteritems():
+            encoded = line_path[:line_path.index(".csv")]
+            config  = ColMap.decode(encoded)
+            style = style_map.get_style(config)
+
+            values = sorted(line_node.values, key=lambda tup: tup[0])
+            xvalues, yvalues = zip(*values)
+
+            plot.plot(xvalues, yvalues, style)
+
+        lines, labels = zip(*style_map.get_key())
+
+        axes.legend(tuple(lines), tuple(labels), prop={'size':10})
+        axes.set_ylabel(details.value)
+        axes.set_xlabel(details.variable)
+        axes.set_xlim(0, axes.get_xlim()[1] + 1)
+        axes.set_ylim(0, axes.get_ylim()[1] + 1)
+
+        axes.set_title(details.title)
+
+        plot.savefig(out_fname, format=OUT_FORMAT)
+
+        sys.stderr.write('\r {0:.2%}'.format(float(id)/num_plots))
+        sys.stderr.write('\n')
+
+def plot_exp(data_dir, out_dir, force):
+    print("Reading data...")
+    dir_map = DirMap.read(data_dir)
+    print("Sorting configs...")
+    tuple_table = ReducedTupleTable.from_dir_map(dir_map)
+    col_map = tuple_table.get_col_map()
+
+    if not os.path.exists(out_dir):
+        os.mkdir(out_dir)
+
+    print("Plotting data...")
+    plot_by_variable(dir_map, col_map, out_dir, force)
+    # plot_by_config(tuple_table, out_dir)
 
 def main():
     opts, args = parse_args()
     args = args or [os.getcwd()]
 
-    # if opts.force and os.path.exists(opts.out_dir):
-    #     sh.rmtree(opts.out_dir)
-    # if not os.path.exists(opts.out_dir):
-    #     os.mkdir(opts.out_dir)
+    if opts.force and os.path.exists(opts.out_dir):
+        sh.rmtree(opts.out_dir)
+    if not os.path.exists(opts.out_dir):
+        os.mkdir(opts.out_dir)
 
     for exp in args:
         name = os.path.split(exp)[1]
-        out_dir = "%s/%s" % (opts.out_dir, exp)
-
-        plot_exp(name, exp, out_dir)
+        if exp != os.getcwd():
+            out_dir = "%s/%s" % (opts.out_dir, name)
+        else:
+            out_dir = os.getcwd()
+        plot_exp(exp, out_dir, opts.force)
 
 if __name__ == '__main__':
     main()

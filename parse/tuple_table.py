@@ -12,7 +12,7 @@ class TupleTable(object):
         self.col_map = col_map
         self.table = defaultdict(default)
 
-    def col_map(self):
+    def get_col_map(self):
         return self.col_map
 
     def __getitem__(self, kv):
@@ -93,14 +93,21 @@ class ReducedTupleTable(TupleTable):
         Leaf = namedtuple('Leaf', ['stat', 'variable', 'base',
                                    'summary', 'config', 'values'])
         def leafs():
-            for path, values in dir_map.leafs():
-                stat, variable, base_type, summary_type, leaf = path
+            for path, node in dir_map.leafs():
+                # The path will be of at least size 1: the filename
+                leaf = path.pop()
+
+                # Set acceptable defaults for the rest of the path
+                path += ['?', '?', 'Avg', 'Avg'][len(path):]
+
+                [stat, variable, base_type, summary_type] = path
 
                 config_str = leaf[:leaf.index('.csv')]
                 config = ColMap.decode(config_str)
 
-                yield Leaf(stat, variable, base_type,
-                           summary_type, config, values)
+                leaf = Leaf(stat, variable, base_type,
+                            summary_type, config, node.values)
+                yield leaf
 
         builder = ColMapBuilder()
 
@@ -119,7 +126,6 @@ class ReducedTupleTable(TupleTable):
                 summary = table[leaf.config][leaf.stat]
                 summary[leaf.summary][leaf.base] = y
 
-        print("read: %s" % table)
         return table
 
     def write_map(self, out_map):
