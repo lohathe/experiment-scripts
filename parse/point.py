@@ -8,9 +8,9 @@ from enum import Enum
 from collections import defaultdict
 
 Type = Enum(['Min','Max','Avg','Var'])
-default_typemap = {Type.Max : {Type.Max : 1, Type.Min : 0, Type.Avg : 1, Type.Var : 1},
-                   Type.Min : {Type.Max : 1, Type.Min : 0, Type.Avg : 1, Type.Var : 1},
-                   Type.Avg : {Type.Max : 1, Type.Min : 0, Type.Avg : 1, Type.Var : 1}}
+default_typemap = {Type.Max : {Type.Max : 1, Type.Min : 1, Type.Avg : 1, Type.Var : 1},
+                   Type.Min : {Type.Max : 1, Type.Min : 1, Type.Avg : 1, Type.Var : 1},
+                   Type.Avg : {Type.Max : 1, Type.Min : 1, Type.Avg : 1, Type.Var : 1}}
 
 def make_typemap():
     return copy.deepcopy(default_typemap)

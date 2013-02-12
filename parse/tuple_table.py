@@ -27,6 +27,9 @@ class TupleTable(object):
         key = self.col_map.get_key(kv)
         return key in self.table
 
+    def __iter__(self):
+        return self.table.iteritems()
+
     def reduce(self):
         reduced = ReducedTupleTable(self.col_map)
         for key, value in self.table.iteritems():
@@ -92,21 +95,27 @@ class ReducedTupleTable(TupleTable):
     def from_dir_map(dir_map):
         Leaf = namedtuple('Leaf', ['stat', 'variable', 'base',
                                    'summary', 'config', 'values'])
+
+        def next_type(path):
+            return path.pop() if path[-1] in Type else Type.Avg
+
         def leafs():
             for path, node in dir_map.leafs():
                 # The path will be of at least size 1: the filename
                 leaf = path.pop()
 
-                # Set acceptable defaults for the rest of the path
-                path += ['?', '?', 'Avg', 'Avg'][len(path):]
+                base = path.pop() if (path and path[-1] in Type) else Type.Avg
+                summ = path.pop() if (path and path[-1] in Type) else Type.Avg
 
-                [stat, variable, base_type, summary_type] = path
+                path += ['?', '?'][len(path):]
+
+                [stat, variable] = path
 
                 config_str = leaf[:leaf.index('.csv')]
                 config = ColMap.decode(config_str)
 
-                leaf = Leaf(stat, variable, base_type,
-                            summary_type, config, node.values)
+                leaf = Leaf(stat, variable, base, summ,
+                            config, node.values)
                 yield leaf
 
         builder = ColMapBuilder()
