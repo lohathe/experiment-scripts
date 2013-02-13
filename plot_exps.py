@@ -10,6 +10,7 @@ from optparse import OptionParser
 from parse.col_map import ColMap,ColMapBuilder
 from parse.dir_map import DirMap
 from plot.style import StyleMap
+from multiprocessing import Pool, cpu_count
 
 def parse_args():
     parser = OptionParser("usage: %prog [options] [csv_dir]...")
@@ -21,10 +22,11 @@ def parse_args():
 
     return parser.parse_args()
 
-ExpDetails = namedtuple('ExpDetails', ['variable', 'value', 'title', 'out'])
+ExpDetails = namedtuple('ExpDetails', ['variable', 'value', 'title',
+                                       'out', 'node'])
 OUT_FORMAT = 'pdf'
 
-def get_details(path, out_dir):
+def get_details(node, path, out_dir):
     '''Decode a @path into details about a single experiment.'''
     out = "_".join(path) if path else "plot"
     out = "%s/%s.%s" % (out_dir, out, OUT_FORMAT)
@@ -36,9 +38,9 @@ def get_details(path, out_dir):
     title += " by %s" % variable if variable else ""
     title += " (%s)" % (", ".join(path)) if path else ""
 
-    return ExpDetails(variable, value, title, out)
+    return ExpDetails(variable, value, title, out, node)
 
-def plot_by_variable(plot_node, details):
+def plot_by_variable(details):
     '''Plot each .csv files under @plot_node as a line on a shared plot.'''
 
     builder = ColMapBuilder()
@@ -46,7 +48,7 @@ def plot_by_variable(plot_node, details):
 
     # Generate mapping of (column)=>(line property to vary) for consistently
     # formatted plots
-    for line_path, line_node in plot_node.children.iteritems():
+    for line_path, line_node in details.node.children.iteritems():
         encoded = line_path[:line_path.index(".csv")]
         line_config = ColMap.decode(encoded)
 
@@ -85,8 +87,6 @@ def plot_dir(data_dir, out_dir, force):
     sys.stderr.write("Reading data...\n")
     dir_map = DirMap.read(data_dir)
 
-    sys.stderr.write("Creating column map...\n")
-
     if not os.path.exists(out_dir):
         os.mkdir(out_dir)
 
@@ -94,18 +94,20 @@ def plot_dir(data_dir, out_dir, force):
 
     # Count total plots for % counter
     num_plots = len([x for x in dir_map.leafs(1)])
-    plot_num  = 0
 
+    plot_details = []
     for plot_path, plot_node in dir_map.leafs(1):
-        details = get_details(plot_path, out_dir)
+        details = get_details(plot_node, plot_path, out_dir)
 
         if force or not os.path.exists(details.out):
-            plot_by_variable(plot_node, details)
+            plot_details += [details]
 
-        plot_num += 1
-
-        sys.stderr.write('\r {0:.2%}'.format(float(plot_num)/num_plots))
-        sys.stderr.write('\n')
+    procs = min(len(plot_details), cpu_count()/2)
+    pool  = Pool(processes=procs)
+    enum  = pool.imap_unordered(plot_by_variable, plot_details)
+    for i, _ in enumerate(enum):
+        sys.stderr.write('\r {0:.2%}'.format(float(i)/num_plots))
+    sys.stderr.write('\n')
 
 def main():
     opts, args = parse_args()

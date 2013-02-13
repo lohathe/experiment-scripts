@@ -16,7 +16,7 @@ from parse.dir_map import DirMap
 from parse.point import ExpPoint
 from parse.tuple_table import TupleTable,ReducedTupleTable
 from parse.col_map import ColMapBuilder
-
+from multiprocessing import Pool, cpu_count
 
 def parse_args():
     # TODO: convert data-dir to proper option, clean 'dest' options
@@ -106,7 +106,7 @@ def parse_exp(exp, force):
 
             pickle.dump(result, f)
 
-    return result
+    return (exp, result)
 
 def main():
     opts, args = parse_args()
@@ -126,8 +126,11 @@ def main():
     result_table = TupleTable(col_map)
 
     sys.stderr.write("Parsing data...\n")
-    for i,exp in enumerate(exps):
-        result = parse_exp(exp, opts.force)
+
+    procs = min(len(exps), cpu_count()/2)
+    pool  = Pool(processes=procs)
+    enum  = pool.imap_unordered(parse_exp, exps, [opts.force]*len(exps))
+    for i, (exp, result) in enumerate(enum):
         if opts.verbose:
             print(result)
         else:

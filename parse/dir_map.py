@@ -4,38 +4,38 @@ import re
 
 from collections import defaultdict
 
-class DirMap(object):
-    class Node(object):
-        def __init__(self, parent = None):
-            self.parent = parent
-            self.children = defaultdict(lambda : DirMap.Node(self))
-            self.values = []
+class DirMapNode(object):
+    def __init__(self):
+        self.children = defaultdict(DirMapNode)
+        self.values = []
 
-        def heir(self, generation=1):
-            def heir2(node, generation):
-                if not generation:
-                    return node
-                elif not node.children:
-                    return None
-                else:
-                    next_heir = node.children.values()[0]
-                    return next_heir.heir(generation - 1)
-            return heir2(self, generation)
-
-        def leafs(self, path=[], offset=0):
-            path = list(path)
-            check_node = self.heir(offset)
-            if check_node and check_node.children:
-                for child_name, child_node in self.children.iteritems():
-                    path += [child_name]
-                    for leaf in child_node.leafs(path, offset):
-                        yield leaf
-                    path.pop()
+    def heir(self, generation=1):
+        def heir2(node, generation):
+            if not generation:
+                return node
+            elif not node.children:
+                return None
             else:
-                yield (path, self)
+                next_heir = node.children.values()[0]
+                return next_heir.heir(generation - 1)
+        return heir2(self, generation)
+
+    def leafs(self, path=[], offset=0):
+        path = list(path)
+        check_node = self.heir(offset)
+        if check_node and check_node.children:
+            for child_name, child_node in self.children.iteritems():
+                path += [child_name]
+                for leaf in child_node.leafs(path, offset):
+                    yield leaf
+                path.pop()
+        else:
+            yield (path, self)
+
+class DirMap(object):
 
     def __init__(self):
-        self.root = DirMap.Node(None)
+        self.root = DirMapNode()
         self.values  = []
 
     def add_values(self, path, values):
