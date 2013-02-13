@@ -7,7 +7,7 @@ class Style(namedtuple('SS', ['marker', 'line', 'color'])):
 
 class StyleMap(object):
     '''Maps configs (dicts) to specific line styles.'''
-    DEFAULT = Style('.', '-', 'k')
+    DEFAULT = Style('', '', 'k')
 
     def __init__(self, col_list, col_values):
         '''Assign (some) columns in @col_list to fields in @Style to vary, and

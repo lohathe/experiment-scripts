@@ -7,9 +7,8 @@ import shutil as sh
 import sys
 from collections import namedtuple
 from optparse import OptionParser
-from parse.col_map import ColMap
+from parse.col_map import ColMap,ColMapBuilder
 from parse.dir_map import DirMap
-from parse.tuple_table import ReducedTupleTable
 from plot.style import StyleMap
 
 def parse_args():
@@ -39,26 +38,32 @@ def get_details(path, out_dir):
 
     return ExpDetails(variable, value, title, out)
 
-def plot_by_variable(plot_node, col_map, details):
+def plot_by_variable(plot_node, details):
     '''Plot each .csv files under @plot_node as a line on a shared plot.'''
+
+    builder = ColMapBuilder()
+    config_nodes = []
 
     # Generate mapping of (column)=>(line property to vary) for consistently
     # formatted plots
-    columns = list(col_map.columns())
-    if details.variable and details.variable in columns:
-        columns.remove(details.variable)
-    style_map = StyleMap(columns, col_map.get_values())
+    for line_path, line_node in plot_node.children.iteritems():
+        encoded = line_path[:line_path.index(".csv")]
+        line_config = ColMap.decode(encoded)
+
+        for k, v in line_config.iteritems():
+            builder.try_add(k, v)
+        config_nodes += [(line_config, line_node)]
+
+    col_map   = builder.build()
+    style_map = StyleMap(col_map.columns(), col_map.get_values())
 
     figure = plot.figure()
     axes = figure.add_subplot(111)
 
-    # Create a line for each file node
-    for line_path, line_node in plot_node.children.iteritems():
+    # Create a line for each file node and its configuration
+    for line_config, line_node in config_nodes:
         # Create line style to match this configuration
-        encoded = line_path[:line_path.index(".csv")]
-        config  = ColMap.decode(encoded)
-        style   = style_map.get_style(config)
-
+        style  = style_map.get_style(line_config)
         values = sorted(line_node.values, key=lambda tup: tup[0])
         xvalues, yvalues = zip(*values)
 
@@ -81,8 +86,6 @@ def plot_dir(data_dir, out_dir, force):
     dir_map = DirMap.read(data_dir)
 
     sys.stderr.write("Creating column map...\n")
-    tuple_table = ReducedTupleTable.from_dir_map(dir_map)
-    col_map = tuple_table.get_col_map()
 
     if not os.path.exists(out_dir):
         os.mkdir(out_dir)
@@ -97,7 +100,7 @@ def plot_dir(data_dir, out_dir, force):
         details = get_details(plot_path, out_dir)
 
         if force or not os.path.exists(details.out):
-            plot_by_variable(plot_node, col_map, details)
+            plot_by_variable(plot_node, details)
 
         plot_num += 1
 
