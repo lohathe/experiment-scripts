@@ -1,6 +1,6 @@
 import os
 import time
-import litmus_util
+import litmus_util as lu
 from operator import methodcaller
 from tracer import SchedTracer, LogTracer, PerfTracer, LinuxTracer, OverheadTracer
 
@@ -92,6 +92,8 @@ class Experiment(object):
         map(assign_cwd, self.executables)
 
     def __run_tasks(self):
+        already_waiting = lu.waiting_tasks()
+
         self.log("Starting the programs")
         for e in self.executables:
             try:
@@ -99,12 +101,12 @@ class Experiment(object):
             except:
                 raise Exception("Executable failed: %s" % e)
 
-        waiting = litmus_util.waiting_tasks()
-
-        if waiting:
-            sleep_time = len(self.executables) / litmus_util.num_cpus()
-            self.log("Sleeping for %d seconds before release" % sleep_time)
-            time.sleep(sleep_time)
+        self.log("Sleeping until tasks are ready for release...")
+        start = time.clock()
+        while (lu.waiting_tasks() - already_waiting) < len(self.executables):
+            if time.clock() - start > 30.0:
+                raise Exception("Too much time has passed waiting for tasks!")
+            time.sleep(1)
 
         # Overhead tracer must be started right after release or overhead
         # measurements will be full of irrelevant records
@@ -112,11 +114,8 @@ class Experiment(object):
             self.log("Starting overhead trace")
             self.overhead_trace.start_tracing()
 
-        if waiting:
-            self.log("Releasing %d tasks" % len(self.executables))
-            released = litmus_util.release_tasks()
-        else:
-            released = len(self.executables)
+        self.log("Releasing %d tasks" % len(self.executables))
+        released = lu.release_tasks()
 
         ret = True
         if released != len(self.executables):
@@ -127,7 +126,7 @@ class Experiment(object):
 
             time.sleep(5)
 
-            released = litmus_util.release_tasks()
+            released = lu.release_tasks()
 
             self.log("Re-released %d tasks" % released)
 
@@ -170,7 +169,7 @@ class Experiment(object):
                 self.teardown()
         finally:
             self.log("Switching to Linux scheduler")
-            litmus_util.switch_scheduler("Linux")
+            lu.switch_scheduler("Linux")
 
         if succ:
             self.__save_results()
@@ -181,11 +180,8 @@ class Experiment(object):
         self.log("Writing %d proc entries" % len(self.proc_entries))
         map(methodcaller('write_proc'), self.proc_entries)
 
-        if len(self.proc_entries):
-            time.sleep(2)
-
         self.log("Switching to %s" % self.scheduler)
-        litmus_util.switch_scheduler(self.scheduler)
+        lu.switch_scheduler(self.scheduler)
 
         self.log("Starting %d tracers" % len(self.tracers))
         map(methodcaller('start_tracing'), self.tracers)
@@ -197,15 +193,9 @@ class Experiment(object):
             executable.stderr_file = self.exec_err
         map(set_out, self.executables)
 
-        time.sleep(4)
-
     def teardown(self):
         self.exec_out and self.exec_out.close()
         self.exec_err and self.exec_err.close()
-
-        sleep_time = 10
-        self.log("Sleeping %d seconds to allow buffer flushing" % sleep_time)
-        time.sleep(sleep_time)
 
         self.log("Stopping tracers")
         map(methodcaller('stop_tracing'), self.tracers)
