@@ -88,13 +88,14 @@ def load_experiment(sched_file, scheduler, duration, param_file, out_dir):
     if not os.path.isfile(sched_file):
         raise IOError("Cannot find schedule file: %s" % sched_file)
 
-    dirname = os.path.split(sched_file)[0]
+    dir_name, fname = os.path.split(sched_file)
+    exp_name = os.path.split(dir_name)[1] + "/" + fname
 
     params = {}
     kernel = ""
 
     param_file = param_file or \
-      "%s/%s" % (dirname, conf.DEFAULTS['params_file'])
+      "%s/%s" % (dir_name, conf.DEFAULTS['params_file'])
 
     if os.path.isfile(param_file):
         params = load_params(param_file)
@@ -112,10 +113,10 @@ def load_experiment(sched_file, scheduler, duration, param_file, out_dir):
 
     # Parse schedule file's intentions
     schedule = load_schedule(sched_file)
-    work_dir = "%s/tmp" % dirname
+    work_dir = "%s/tmp" % dir_name
     fix_paths(schedule, os.path.split(sched_file)[0], sched_file)
 
-    run_exp(sched_file, schedule, scheduler, kernel, duration, work_dir, out_dir)
+    run_exp(exp_name, schedule, scheduler, kernel, duration, work_dir, out_dir)
 
     # Save parameters used to run experiment in out_dir
     out_params = dict(params.items() +
