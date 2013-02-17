@@ -10,7 +10,7 @@ BINS = {'rtspin'    : get_executable('rtspin', 'liblitmus'),
         'ftsort'    : get_executable('ftsort', 'feather-trace-tools'),
         'st_trace'  : get_executable('st_trace', 'feather-trace-tools'),
         'trace-cmd' : get_executable('trace-cmd', 'rt-kernelshark'),
-		# Optional, as sched_trace is not a publically supported repository
+        # Optional, as sched_trace is not a publically supported repository
         'st_show'   : get_executable('st_show', 'sched_trace', True)}
 
 '''Names of output files.'''
@@ -20,19 +20,18 @@ FILES = {'ft_data'    : 'ft.bin',
          'log_data'   : 'trace.slog'}
 
 '''Default parameter names in params.py.'''
-# TODO: add check for config options
-PARAMS = {'sched'  : 'scheduler',     # Scheduler used by run_exps
-          'dur'    : 'duration',      # Duration of tests in run_exps
-          'kernel' : 'uname',         # Regex of required OS name in run_exps
-          'cycles' : 'cpu-frequency', # Frequency run_exps was run with
-          'tasks'  : 'tasks'          # Number of tasks
+PARAMS = {'sched'  : 'scheduler',       # Scheduler used by run_exps
+          'dur'    : 'duration',        # Duration of tests in run_exps
+          'kernel' : 'uname',           # Regex of required OS name in run_exps
+          'cycles' : 'clock-frequency', # Frequency run_exps was run with
+          'tasks'  : 'tasks'            # Number of tasks
           }
 
 '''Default values for program options.'''
 DEFAULTS = {'params_file' : 'params.py',
             'sched_file'  : 'sched.py',
             'duration'    : 10,
-            'spin'		  : 'rtspin',
+            'spin'	  : 'rtspin',
             'cycles'      : 2000}
 
 '''Default sched_trace events (this is all of them).'''

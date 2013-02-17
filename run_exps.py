@@ -14,9 +14,13 @@ from run.executable.executable import Executable
 from run.experiment import Experiment,ExperimentDone
 from run.proc_entry import ProcEntry
 
-def InvalidKernel(Exception):
-    def __init__(self, kernel):
+class InvalidKernel(Exception):
+    def __init__(self, kernel, wanted):
         self.kernel = kernel
+        self.wanted = wanted
+
+    def __str__(self):
+        return "Kernel '%s' does not match '%s'." % (self.kernel, self.wanted)
 
 def parse_args():
     parser = OptionParser("usage: %prog [options] [sched_file]... [exp_dir]...")
@@ -114,12 +118,16 @@ def load_experiment(sched_file, scheduler, duration, param_file, out_dir):
     run_exp(sched_file, schedule, scheduler, kernel, duration, work_dir, out_dir)
 
     # Save parameters used to run experiment in out_dir
-    # Cycles is saved here for accurate overhead calculations later
     out_params = dict(params.items() +
                       [(conf.PARAMS['sched'],  scheduler),
                        (conf.PARAMS['tasks'],  len(schedule['spin'])),
-                       (conf.PARAMS['dur'],    duration),
-                       (conf.PARAMS['cycles'], lu.cpu_freq())])
+                       (conf.PARAMS['dur'],    duration)])
+
+    # Feather-trace clock frequency saved for accurate overhead parsing
+    ft_freq = lu.ft_freq()
+    if ft_freq:
+        out_params[conf.PARAMS['cycles']] = ft_freq
+
     with open("%s/%s" % (out_dir, conf.DEFAULTS['params_file']), 'w') as f:
         f.write(str(out_params))
 

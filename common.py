@@ -33,12 +33,14 @@ def get_executable(prog, hint, optional=False):
 def get_config_option(option):
     '''Search for @option in installed kernel config (if present).
     Raise an IOError if the kernel config isn't found in /boot/.'''
-    uname = subprocess.check_output(["uname", "-r"])[-1]
+    uname = subprocess.check_output(["uname", "-r"]).strip()
     fname = "/boot/config-%s" % uname
 
     if os.path.exists(fname):
         config_regex = "^CONFIG_{}=(?P<val>.*)$".format(option)
-        match = re.search(config_regex, open(fname, 'r').read())
+        with open(fname, 'r') as f:
+            data = f.read()
+        match = re.search(config_regex, data, re.M)
         if not match:
             return None
         else:

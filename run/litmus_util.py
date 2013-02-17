@@ -4,6 +4,7 @@ import subprocess
 import os
 import stat
 import config.config as conf
+from common import get_config_option
 
 def num_cpus():
     '''Return the number of CPUs in the system.'''
@@ -17,18 +18,25 @@ def num_cpus():
                 cpus += 1
     return cpus
 
-def cpu_freq():
-    '''
-    The frequency (in MHz) of the CPU.
-    '''
-    reg = re.compile(r'^cpu MHz\s*:\s*(\d+)', re.M)
-    with open('/proc/cpuinfo', 'r') as f:
-        data = f.read()
+def ft_freq():
+    '''The frequency (in MHz) of the clock used by feather trace.'''
+    if get_config_option('CPU_V7') == 'y':
+        # Arm V7s use a millisecond timer
+        freq = 1000.0
+    elif get_config_option('X86') == 'y':
+        # X86 timer is equal to processor clock
+        reg = re.compile(r'^cpu MHz\s*:\s*(?P<FREQ>\d+)', re.M)
+        with open('/proc/cpuinfo', 'r') as f:
+            data = f.read()
 
-    match = re.search(reg, data)
-    if not match:
-        raise Exception("Cannot parse CPU frequency!")
-    return int(match.group(1))
+        match = re.search(reg, data)
+        if not match:
+            raise Exception("Cannot parse CPU frequency from x86 CPU!")
+        freq = int(match.group('FREQ'))
+    else:
+        # You're on your own
+        freq = 0
+    return freq
 
 def switch_scheduler(switch_to_in):
     '''Switch the scheduler to whatever is passed in.
