@@ -4,7 +4,6 @@ import subprocess
 import os
 import stat
 import config.config as conf
-from common import get_config_option
 
 def num_cpus():
     '''Return the number of CPUs in the system.'''
@@ -19,11 +18,12 @@ def num_cpus():
     return cpus
 
 def ft_freq():
-    '''The frequency (in MHz) of the clock used by feather trace.'''
-    if get_config_option('CPU_V7') == 'y':
+    umachine = subprocess.check_output(["uname", "-m"])
+
+    if re.match("armv7", umachine):
         # Arm V7s use a millisecond timer
         freq = 1000.0
-    elif get_config_option('X86') == 'y':
+    elif re.match("x86", umachine):
         # X86 timer is equal to processor clock
         reg = re.compile(r'^cpu MHz\s*:\s*(?P<FREQ>\d+)', re.M)
         with open('/proc/cpuinfo', 'r') as f:
@@ -76,7 +76,7 @@ def is_device(dev):
     return not (not mode & stat.S_IFCHR)
 
 def waiting_tasks():
-    reg = re.compile(r'^ready.*(?P<READY>\d+)$', re.M)
+    reg = re.compile(r'^ready.*?(?P<READY>\d+)$', re.M)
     with open('/proc/litmus/stats', 'r') as f:
         data = f.read()
 

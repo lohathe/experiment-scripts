@@ -46,7 +46,7 @@ class DirMap(object):
 
     def remove_childless(self):
         def remove_childless2(node):
-            for key, child in node:
+            for key, child in node.children.items():
                 remove_childless2(child)
                 if not (child.children or child.values):
                     node.children.pop(key)

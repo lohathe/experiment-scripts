@@ -1,8 +1,9 @@
 import os
 import time
-import litmus_util as lu
+import run.litmus_util as lu
+import shutil as sh
 from operator import methodcaller
-from tracer import SchedTracer, LogTracer, PerfTracer, LinuxTracer, OverheadTracer
+from run.tracer import SchedTracer, LogTracer, PerfTracer, LinuxTracer, OverheadTracer
 
 class ExperimentException(Exception):
     '''Used to indicate when there are problems with an experiment.'''
@@ -78,6 +79,8 @@ class Experiment(object):
                      Experiment.INTERRUPTED_DIR)
             interrupted = "%s/%s" % (os.path.split(self.working_dir)[0],
                                      Experiment.INTERRUPTED_DIR)
+            if os.path.exists(interrupted):
+                sh.rmtree(interrupted)
             os.rename(self.working_dir, interrupted)
 
         os.mkdir(self.working_dir)
@@ -154,7 +157,7 @@ class Experiment(object):
         os.rename(self.working_dir, self.finished_dir)
 
     def log(self, msg):
-        print "[Exp %s]: %s" % (self.name, msg)
+        print("[Exp %s]: %s" % (self.name, msg))
 
     def run_exp(self):
         succ = False

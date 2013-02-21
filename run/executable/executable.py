@@ -44,7 +44,6 @@ class Executable(object):
         return full_command
 
     def __str__(self):
-        print("Full command: %s" % self.__get_full_command())
         return " ".join(self.__get_full_command())
 
     def execute(self):
@@ -63,7 +62,7 @@ class Executable(object):
         '''Send the terminate signal to the binary.'''
         self.sp.terminate()
 
-    def wait(self):
+    def wait(self, error=True):
         '''Wait until the executable is finished, checking return code.
 
         If the exit status is non-zero, raise an exception.
@@ -71,8 +70,10 @@ class Executable(object):
         '''
 
         self.sp.wait()
-        if self.sp.returncode != 0:
-            print >>sys.stderr, "Non-zero return: %s %s" % (self.exec_file, " ".join(self.extra_args))
+        if self.sp.returncode != 0 and error:
+            print >>sys.stderr, "Non-zero return %d: %s %s" % (self.sp.returncode,
+                                                               self.exec_file,
+                                                               " ".join(self.extra_args))
             return 0
         else:
             return 1

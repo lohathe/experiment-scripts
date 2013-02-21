@@ -1,10 +1,9 @@
-import litmus_util
+from . import litmus_util
 import os
 import config.config as conf
 
 from operator import methodcaller
-from executable.ftcat import FTcat,Executable
-
+from run.executable.ftcat import FTcat,Executable
 
 class Tracer(object):
     def __init__(self, name, output_dir):
@@ -18,7 +17,6 @@ class Tracer(object):
     def stop_tracing(self):
         map(methodcaller('terminate'), self.bins)
         map(methodcaller('wait'), self.bins)
-
 
 class LinuxTracer(Tracer):
     EVENT_ROOT = "/sys/kernel/debug/tracing"
@@ -45,7 +43,6 @@ class LinuxTracer(Tracer):
         map(methodcaller('interrupt'), self.bins)
         map(methodcaller('wait'), self.bins)
 
-
 class LogTracer(Tracer):
     DEVICE_STR = '/dev/litmus/log'
 
@@ -63,6 +60,9 @@ class LogTracer(Tracer):
     def enabled():
         return litmus_util.is_device(LogTracer.DEVICE_STR)
 
+    def stop_tracing(self):
+        map(methodcaller('interrupt'), self.bins)
+        map(methodcaller('wait', False), self.bins)
 
 class SchedTracer(Tracer):
     DEVICE_STR = '/dev/litmus/sched_trace'
@@ -76,14 +76,14 @@ class SchedTracer(Tracer):
                 stdout_f = open('%s/st-%d.bin' % (self.output_dir, cpu), 'w')
                 stderr_f = open('%s/st-%d-stderr.txt' % (self.output_dir, cpu), 'w')
                 dev = '{0}{1}'.format(SchedTracer.DEVICE_STR, cpu)
-                ftc = FTcat(conf.BINS['ftcat'], stdout_f, stderr_f, dev, conf.SCHED_EVENTS, cpu=cpu)
+                ftc = FTcat(conf.BINS['ftcat'], stdout_f, stderr_f, dev,
+                            conf.SCHED_EVENTS, cpu=cpu)
 
                 self.bins.append(ftc)
 
     @staticmethod
     def enabled():
-		return litmus_util.is_device("%s%d" % (SchedTracer.DEVICE_STR, 0))
-
+        return litmus_util.is_device("%s%d" % (SchedTracer.DEVICE_STR, 0))
 
 class OverheadTracer(Tracer):
     DEVICE_STR = '/dev/litmus/ft_trace0'
@@ -100,8 +100,7 @@ class OverheadTracer(Tracer):
 
     @staticmethod
     def enabled():
-		return litmus_util.is_device(OverheadTracer.DEVICE_STR)
-
+        return litmus_util.is_device(OverheadTracer.DEVICE_STR)
 
 class PerfTracer(Tracer):
     def __init__(self, output_dir):

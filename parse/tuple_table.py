@@ -3,8 +3,6 @@ from collections import defaultdict,namedtuple
 from point import SummaryPoint,Type
 from dir_map import DirMap
 from col_map import ColMap,ColMapBuilder
-
-
 from pprint import pprint
 
 class TupleTable(object):
@@ -88,7 +86,6 @@ class ReducedTupleTable(TupleTable):
                 self.__add_to_dirmap(dir_map, col, kv, point)
 
         dir_map.remove_childless()
-        print("wrote: %s" % self)
         return dir_map
 
     @staticmethod

@@ -105,7 +105,7 @@ def recordtype(typename, field_names, default=0):
     namespace = {}
     try:
         exec template in namespace
-    except SyntaxError, e:
+    except SyntaxError as e:
         raise SyntaxError(e.message + ':\n' + template)
     cls = namespace[typename]
 

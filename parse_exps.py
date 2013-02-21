@@ -8,13 +8,13 @@ import parse.sched as st
 import pickle
 import shutil as sh
 import sys
+import traceback
 
 from collections import namedtuple
 from common import load_params
 from optparse import OptionParser
-from parse.dir_map import DirMap
 from parse.point import ExpPoint
-from parse.tuple_table import TupleTable,ReducedTupleTable
+from parse.tuple_table import TupleTable
 from parse.col_map import ColMapBuilder
 from multiprocessing import Pool, cpu_count
 
@@ -23,7 +23,6 @@ def parse_args():
     parser = OptionParser("usage: %prog [options] [data_dir]...")
 
     print("default to no params.py")
-    print("save measurements in temp directory for faster reloading")
 
     parser.add_option('-o', '--out', dest='out',
                       help='file or directory for data output', default='parse-data')
@@ -85,16 +84,24 @@ def load_exps(exp_dirs, cm_builder, clean):
 
     return exps
 
-def parse_exp(exp, force):
+def parse_exp(exp_force):
+    # Tupled for multiprocessing
+    exp, force  = exp_force
+
     result_file = exp.work_dir + "/exp_point.pkl"
     should_load = not force and os.path.exists(result_file)
-    mode = 'r' if should_load else 'w'
 
-    with open(result_file, mode + 'b') as f:
-        if should_load:
-            # No need to go through this work twice
-            result = pickle.load(f)
-        else:
+    result = None
+    if should_load:
+        with open(result_file, 'rb') as f:
+            try:
+                # No need to go through this work twice
+                result = pickle.load(f)
+            except:
+                pass
+
+    if not result:
+        try:
             result = ExpPoint(exp.path)
             cycles = exp.params[conf.PARAMS['cycles']]
 
@@ -104,7 +111,10 @@ def parse_exp(exp, force):
             # Write scheduling statistics into result
             st.extract_sched_data(result, exp.path, exp.work_dir)
 
-            pickle.dump(result, f)
+            with open(result_file, 'wb') as f:
+                pickle.dump(result, f)
+        except:
+            traceback.print_exc()
 
     return (exp, result)
 
@@ -128,14 +138,24 @@ def main():
     sys.stderr.write("Parsing data...\n")
 
     procs = min(len(exps), cpu_count()/2)
-    pool  = Pool(processes=procs)
-    enum  = pool.imap_unordered(parse_exp, exps, [opts.force]*len(exps))
-    for i, (exp, result) in enumerate(enum):
-        if opts.verbose:
-            print(result)
-        else:
-            sys.stderr.write('\r {0:.2%}'.format(float(i)/len(exps)))
-        result_table[exp.params] += [result]
+    pool = Pool(processes=procs)
+    pool_args = zip(exps, [opts.force]*len(exps))
+    enum = pool.imap_unordered(parse_exp, pool_args, 1)
+
+    try:
+        for i, (exp, result) in enumerate(enum):
+            if opts.verbose:
+                print(result)
+            else:
+                sys.stderr.write('\r {0:.2%}'.format(float(i)/len(exps)))
+                result_table[exp.params] += [result]
+        pool.close()
+    except:
+        pool.terminate()
+        traceback.print_exc()
+        raise Exception("Failed parsing!")
+    finally:
+        pool.join()
 
     sys.stderr.write('\n')
 

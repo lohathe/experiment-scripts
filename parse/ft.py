@@ -3,6 +3,7 @@ import numpy as np
 import os
 import re
 import shutil as sh
+import sys
 import subprocess
 
 from point import Measurement,Type
@@ -28,7 +29,6 @@ def parse_overhead(result, overhead_bin, overhead, cycles, out_dir, err_file):
         raise Exception("Failed (%d) with command: %s" % (ret, " ".join(cmd)))
     if not size:
         os.remove(ovh_fname)
-
     if size and not ret:
         # Map and sort file for stats
         data = np.memmap(ovh_fname, dtype="float32", mode='c')
@@ -47,19 +47,22 @@ def parse_overhead(result, overhead_bin, overhead, cycles, out_dir, err_file):
 
 def sort_ft(ft_file, err_file, out_dir):
     '''Create and return file with sorted overheads from @ft_file.'''
-    out_fname = "{}/{}".format("%s/%s" % (os.getcwd(), out_dir), FT_SORTED_NAME)
+    out_fname = "{}/{}".format(out_dir, FT_SORTED_NAME)
 
     # Sort happens in-place
     sh.copyfile(ft_file, out_fname)
     cmd = [conf.BINS['ftsort'], out_fname]
-    ret = subprocess.call(cmd, cwd="%s/%s" % (os.getcwd(), out_dir), stderr=err_file, stdout=err_file)
 
+    ret = subprocess.call(cmd, cwd=out_dir, stderr=err_file, stdout=err_file)
     if ret:
-        raise Exception("Sort failed with command: %s" % " ".join(cmd))
+        raise Exception("Sort failed (%d) with command: %s" % (ret, " ".join(cmd)))
 
     return out_fname
 
 def extract_ft_data(result, data_dir, work_dir, cycles):
+    data_dir = os.path.abspath(data_dir)
+    work_dir = os.path.abspath(work_dir)
+
     freg = conf.FILES['ft_data'] + "$"
     bins = [f for f in os.listdir(data_dir) if re.match(freg, f)]
 
@@ -67,6 +70,9 @@ def extract_ft_data(result, data_dir, work_dir, cycles):
         return False
 
     bin_file = "{}/{}".format(data_dir, bins[0])
+    if not os.path.getsize(bin_file):
+        sys.stderr.write("Empty feather trace file %s!" % bin_file)
+        return False
 
     with open("%s/%s" % (work_dir, FT_ERR_NAME), 'w') as err_file:
         sorted_bin = sort_ft(bin_file, err_file, work_dir)

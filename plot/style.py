@@ -16,6 +16,9 @@ class StyleMap(object):
         self.field_map = {}
 
         for field, values in self.__get_all()._asdict().iteritems():
+            if not col_list:
+                break
+
             next_column = col_list.pop(0)
             value_dict  = {}
 

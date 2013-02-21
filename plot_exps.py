@@ -5,6 +5,7 @@ import matplotlib.pyplot as plot
 import os
 import shutil as sh
 import sys
+import traceback
 from collections import namedtuple
 from optparse import OptionParser
 from parse.col_map import ColMap,ColMapBuilder
@@ -83,6 +84,15 @@ def plot_by_variable(details):
 
     plot.savefig(details.out, format=OUT_FORMAT)
 
+    return True
+
+def plot_wrapper(details):
+    '''Wrap exceptions in named method for printing in multiprocessing pool.'''
+    try:
+        return plot_by_variable(details)
+    except:
+        traceback.print_exc()
+
 def plot_dir(data_dir, out_dir, force):
     sys.stderr.write("Reading data...\n")
     dir_map = DirMap.read(data_dir)
@@ -102,11 +112,24 @@ def plot_dir(data_dir, out_dir, force):
         if force or not os.path.exists(details.out):
             plot_details += [details]
 
+    if not plot_details:
+        return
+
     procs = min(len(plot_details), cpu_count()/2)
     pool  = Pool(processes=procs)
-    enum  = pool.imap_unordered(plot_by_variable, plot_details)
-    for i, _ in enumerate(enum):
-        sys.stderr.write('\r {0:.2%}'.format(float(i)/num_plots))
+    enum  = pool.imap_unordered(plot_wrapper, plot_details)
+
+    try:
+        for i, _ in enumerate(enum):
+            sys.stderr.write('\r {0:.2%}'.format(float(i)/num_plots))
+        pool.close()
+    except:
+        pool.terminate()
+        traceback.print_exc()
+        raise Exception("Failed plotting!")
+    finally:
+        pool.join()
+
     sys.stderr.write('\n')
 
 def main():

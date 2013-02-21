@@ -2,6 +2,7 @@ import config.config as conf
 import os
 import re
 import struct
+import sys
 import subprocess
 
 from collections import defaultdict,namedtuple
@@ -66,6 +67,10 @@ def register_record(name, id, method, fmt, fields):
 def make_iterator(fname):
     '''Iterate over (parsed record, processing method) in a
     sched-trace file.'''
+    if not os.path.getsize(fname):
+        sys.stderr.write("Empty sched_trace file %s!" % fname)
+        return
+
     f = open(fname, 'rb')
     max_type = len(record_map)
 
@@ -182,4 +187,7 @@ def extract_sched_data(result, data_dir, work_dir):
 
     # Summarize value groups
     for name, data in stat_data.iteritems():
+        if not data:
+            continue
         result[name] = Measurement(str(name)).from_array(data)
+

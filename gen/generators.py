@@ -53,7 +53,7 @@ GenOption = namedtuple('GenOption', ['name', 'types', 'default', 'help'])
 class BaseGenerator(object):
     '''Creates sporadic task sets with the most common Litmus options.'''
     def __init__(self, name, templates, options, params):
-        self.options = self.__make_options() + options
+        self.options = self.__make_options(params) + options
 
         self.__setup_params(params)
 
@@ -61,11 +61,14 @@ class BaseGenerator(object):
         self.template = "\n".join([TP_RM] + templates)
         self.name     = name
 
-    def __make_options(self):
+    def __make_options(self, params):
         '''Return generic Litmus options.'''
 
         # Guess defaults using the properties of this computer
-        cpus = lu.num_cpus()
+        if 'cpus' in params:
+            cpus = min(map(int, params['cpus']))
+        else:
+            cpus = lu.num_cpus()
         try:
             config = get_config_option("RELEASE_MASTER") and True
         except:
@@ -127,9 +130,10 @@ class BaseGenerator(object):
             f.write(str(Template(self.template, searchList=[exp_params])))
 
         del exp_params['task_set']
+        del exp_params['num_tasks']
         exp_params_file = out_dir + "/" + DEFAULTS['params_file']
         with open(exp_params_file, 'wa') as f:
-            exp_params['scheduler'] = 'CEDF'
+            exp_params['scheduler'] = self.name
             f.write(str(exp_params))
 
     def __setup_params(self, params):
@@ -195,7 +199,7 @@ class BaseGenerator(object):
         col_map = builder.build()
 
         for dp in DesignPointGenerator(self.params):
-            dir_leaf = "sched=%s_%s" % (self.name, col_map.get_encoding(dp))
+            dir_leaf = "sched=%s_%s" % (self.name, col_map.encode(dp))
             dir_path = "%s/%s" % (out_dir, dir_leaf.strip('_'))
 
             if os.path.exists(dir_path):
@@ -225,10 +229,10 @@ class BaseGenerator(object):
                 i+= len(word)
                 res += [word]
                 if i > 80:
-                    print ", ".join(res[:-1])
+                    print(", ".join(res[:-1]))
                     res = ["\t\t "+res[-1]]
                     i = line.index("'")
-            print ", ".join(res)
+            print(", ".join(res))
 
 class PartitionedGenerator(BaseGenerator):
     def __init__(self, name, templates, options, params):
@@ -243,7 +247,7 @@ class PartitionedGenerator(BaseGenerator):
 
 class PedfGenerator(PartitionedGenerator):
     def __init__(self, params={}):
-        super(PedfGenerator, self).__init__("P-EDF", [], [], params)
+        super(PedfGenerator, self).__init__("PSN-EDF", [], [], params)
 
 class CedfGenerator(PartitionedGenerator):
     LEVEL_OPTION = GenOption('level', ['L2', 'L3', 'All'], ['L2'],
@@ -255,4 +259,4 @@ class CedfGenerator(PartitionedGenerator):
 
 class GedfGenerator(BaseGenerator):
     def __init__(self, params={}):
-        super(GedfGenerator, self).__init__("G-EDF", [TP_GLOB_TASK], [], params)
+        super(GedfGenerator, self).__init__("GSN-EDF", [TP_GLOB_TASK], [], params)
