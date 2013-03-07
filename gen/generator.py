@@ -198,9 +198,16 @@ class Generator(object):
 
                 os.mkdir(dir_path)
 
+                if trials > 1:
+                    dp['trial'] = trial
                 self.out_dir = dir_path
+
                 self._create_exp(dict(dp))
+
                 del(self.out_dir)
+                if 'trial' in dp:
+                    del dp['trial']
+
 
     def print_help(self):
         s = str(Template("""Generator $name:
