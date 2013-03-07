@@ -77,7 +77,9 @@ class Generator(object):
         release_master = list(set([False, config]))
 
 
-        return [GenOption('cpus', int, [cpus],
+        return [GenOption('num_tasks', int, range(cpus, 5*cpus, cpus),
+                              'Number of tasks per experiment.'),
+                GenOption('cpus', int, [cpus],
                           'Number of processors on target system.'),
                 GenOption('release_master', [True,False], release_master,
                           'Redirect release interrupts to a single CPU.'),

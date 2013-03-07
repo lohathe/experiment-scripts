@@ -1,6 +1,5 @@
 import generator as gen
 import random
-import run.litmus_util as lu
 import schedcat.generator.tasks as tasks
 
 class EdfGenerator(gen.Generator):
@@ -12,14 +11,7 @@ class EdfGenerator(gen.Generator):
 
     def __make_options(self, params):
         '''Return generic EDF options.'''
-        if 'cpus' in params:
-            cpus = min(map(int, params['cpus']))
-        else:
-            cpus = lu.num_cpus()
-
-        return [gen.GenOption('num_tasks', int, range(cpus, 5*cpus, cpus),
-                              'Number of tasks per experiment.'),
-                gen.Generator._dist_option('utils', ['uni-medium'],
+        return [gen.Generator._dist_option('utils', ['uni-medium'],
                                            gen.NAMED_UTILIZATIONS,
                                            'Task utilization distributions.'),
                 gen.Generator._dist_option('periods', ['harmonic'],
