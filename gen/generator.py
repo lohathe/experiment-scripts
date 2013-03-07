@@ -1,16 +1,14 @@
+import gen.rv as rv
+import os
+import run.litmus_util as lu
+import shutil as sh
+
 from Cheetah.Template import Template
 from collections import namedtuple
 from common import get_config_option
 from config.config import DEFAULTS
 from gen.dp import DesignPointGenerator
 from parse.col_map import ColMapBuilder
-
-import gen.rv as rv
-import os
-import random
-import run.litmus_util as lu
-import schedcat.generator.tasks as tasks
-import shutil as sh
 
 NAMED_PERIODS = {
     'harmonic'            : rv.uniform_choice([25, 50, 100, 200]),
@@ -37,21 +35,24 @@ NAMED_UTILIZATIONS = {
                                      (rv.uniform(  0.5, 0.9), 5)]),
 }
 
-# Cheetah templates for schedule files
-TP_CLUSTER = "plugins/C-EDF/cluster{$level}"
+'''Components of Cheetah template for schedule file'''
 TP_RM = """#if $release_master
 release_master{1}
 #end if"""
 TP_TBASE = """#for $t in $task_set
-{}$t.cost $t.period
+{} $t.cost $t.period
 #end for"""
-TP_PART_TASK = TP_TBASE.format("-p $t.cpu ")
 TP_GLOB_TASK = TP_TBASE.format("")
+TP_PART_TASK = TP_TBASE.format("-p $t.cpu")
 
 GenOption = namedtuple('GenOption', ['name', 'types', 'default', 'help'])
 
-class BaseGenerator(object):
-    '''Creates sporadic task sets with the most common Litmus options.'''
+class Generator(object):
+    '''Creates all combinations @options specified by @params.
+
+    This class also performs checks of parameter values and prints out help.
+    All subclasses must implement _create_exp.
+    '''
     def __init__(self, name, templates, options, params):
         self.options = self.__make_options(params) + options
 
@@ -75,21 +76,19 @@ class BaseGenerator(object):
             config = False
         release_master = list(set([False, config]))
 
-        list_types = [str, float, type([])]
 
         return [GenOption('cpus', int, [cpus],
                           'Number of processors on target system.'),
-                GenOption('num_tasks', int, range(cpus, 5*cpus, cpus),
-                          'Number of tasks per experiment.'),
-                GenOption('utils', list_types + NAMED_UTILIZATIONS.keys(),
-                          ['uni-medium'],'Task utilization distributions.'),
-                GenOption('periods', list_types + NAMED_PERIODS.keys(),
-                          ['harmonic'], 'Task period distributions.'),
                 GenOption('release_master', [True,False], release_master,
                           'Redirect release interrupts to a single CPU.'),
                 GenOption('duration', float, [30], 'Experiment duration.')]
 
-    def __create_dist(self, name, value, named_dists):
+    @staticmethod
+    def _dist_option(name, default, distribution, help):
+        return GenOption(name, [str, float, type([])] + distribution.keys(),
+                         default, help)
+
+    def _create_dist(self, name, value, named_dists):
         '''Attempt to create a distribution representing the data in @value.
         If @value is a string, use it as a key for @named_dists.'''
         name = "%s distribution" % name
@@ -104,37 +103,18 @@ class BaseGenerator(object):
         else:
             raise ValueError("Invalid %s value: %s" % (name, value))
 
-    def __create_exp(self, exp_params, out_dir):
-        '''Create a single experiment with @exp_params in @out_dir.'''
-        pdist = self.__create_dist('period',
-                                   exp_params['periods'],
-                                   NAMED_PERIODS)
-        udist = self.__create_dist('utilization',
-                                   exp_params['utils'],
-                                   NAMED_UTILIZATIONS)
-        tg = tasks.TaskGenerator(period=pdist, util=udist)
-
-        ts = []
-        tries = 0
-        while len(ts) != exp_params['num_tasks'] and tries < 5:
-            ts = tg.make_task_set(max_tasks = exp_params['num_tasks'])
-            tries += 1
-        if len(ts) != exp_params['num_tasks']:
-            print("Failed to create task set with parameters: %s" % exp_params)
-
-        self._customize(ts, exp_params)
-
-        sched_file = out_dir + "/" + DEFAULTS['sched_file']
+    def _write_schedule(self, params):
+        '''Write schedule file using current template for @params.'''
+        sched_file = self.out_dir + "/" + DEFAULTS['sched_file']
         with open(sched_file, 'wa') as f:
-            exp_params['task_set'] = ts
-            f.write(str(Template(self.template, searchList=[exp_params])))
+            f.write(str(Template(self.template, searchList=[params])))
 
-        del exp_params['task_set']
-        del exp_params['num_tasks']
-        exp_params_file = out_dir + "/" + DEFAULTS['params_file']
+    def _write_params(self, params):
+        '''Write out file with relevant parameters.'''
+        exp_params_file = self.out_dir + "/" + DEFAULTS['params_file']
         with open(exp_params_file, 'wa') as f:
-            exp_params['scheduler'] = self.name
-            f.write(str(exp_params))
+            params['scheduler'] = self.name
+            f.write(str(params))
 
     def __setup_params(self, params):
         '''Set default parameter values and check that values are valid.'''
@@ -182,9 +162,9 @@ class BaseGenerator(object):
                 retval += [v]
         return retval
 
-    def _customize(self, taskset, exp_params):
-        '''Configure a generated taskset with extra parameters.'''
-        pass
+    def _create_exp(self, exp_params, out_dir):
+        '''Overridden by subclasses.'''
+        raise NotImplementedError
 
     def create_exps(self, out_dir, force, trials):
         '''Create experiments for all possible combinations of params in
@@ -216,7 +196,9 @@ class BaseGenerator(object):
 
                 os.mkdir(dir_path)
 
-                self.__create_exp(dict(dp), dir_path)
+                self.out_dir = dir_path
+                self._create_exp(dict(dp))
+                del(self.out_dir)
 
     def print_help(self):
         s = str(Template("""Generator $name:
@@ -231,37 +213,10 @@ class BaseGenerator(object):
             res = []
             i = 0
             for word in line.split(", "):
-                i+= len(word)
+                i += len(word)
                 res += [word]
                 if i > 80:
                     print(", ".join(res[:-1]))
                     res = ["\t\t "+res[-1]]
                     i = line.index("'")
             print(", ".join(res))
-
-class PartitionedGenerator(BaseGenerator):
-    def __init__(self, name, templates, options, params):
-        super(PartitionedGenerator, self).__init__(name,
-            templates + [TP_PART_TASK], options, params)
-
-    def _customize(self, taskset, exp_params):
-        start = 1 if exp_params['release_master'] else 0
-        # Random partition for now: could do a smart partitioning
-        for t in taskset:
-            t.cpu = random.randint(start, exp_params['cpus'] - 1)
-
-class PedfGenerator(PartitionedGenerator):
-    def __init__(self, params={}):
-        super(PedfGenerator, self).__init__("PSN-EDF", [], [], params)
-
-class CedfGenerator(PartitionedGenerator):
-    LEVEL_OPTION = GenOption('level', ['L2', 'L3', 'All'], ['L2'],
-                             'Cache clustering level.',)
-
-    def __init__(self, params={}):
-        super(CedfGenerator, self).__init__("C-EDF", [TP_CLUSTER],
-            [CedfGenerator.LEVEL_OPTION], params)
-
-class GedfGenerator(BaseGenerator):
-    def __init__(self, params={}):
-        super(GedfGenerator, self).__init__("GSN-EDF", [TP_GLOB_TASK], [], params)

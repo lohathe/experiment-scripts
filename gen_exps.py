@@ -5,7 +5,7 @@ import os
 import re
 import shutil as sh
 
-from gen.generators import GedfGenerator,PedfGenerator,CedfGenerator
+from gen.edf_generators import GedfGenerator,PedfGenerator,CedfGenerator
 from optparse import OptionParser
 
 # There has to be a better way to do this...
