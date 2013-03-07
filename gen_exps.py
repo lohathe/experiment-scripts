@@ -22,6 +22,8 @@ def parse_args():
                       default=("%s/exps"%os.getcwd()))
     parser.add_option('-f', '--force', action='store_true', default=False,
                       dest='force', help='overwrite existing data')
+    parser.add_option('-n', '--num-trials', default=1, type='int', dest='trials',
+                      help='number of task systems for every config')
     parser.add_option('-l', '--list-generators', dest='list_gens',
                       help='list allowed generators', action='store_true',
                       default=False)
@@ -92,7 +94,7 @@ def main():
         params = dict(gen_params.items() + global_params.items())
         generator = GENERATORS[gen_name](params)
 
-        generator.create_exps(opts.out_dir, opts.force)
+        generator.create_exps(opts.out_dir, opts.force, opts.trials)
 
 if __name__ == '__main__':
     main()

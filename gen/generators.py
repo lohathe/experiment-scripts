@@ -186,7 +186,7 @@ class BaseGenerator(object):
         '''Configure a generated taskset with extra parameters.'''
         pass
 
-    def create_exps(self, out_dir, force):
+    def create_exps(self, out_dir, force, trials):
         '''Create experiments for all possible combinations of params in
         @out_dir. Overwrite existing files if @force is True.'''
         builder = ColMapBuilder()
@@ -199,19 +199,24 @@ class BaseGenerator(object):
         col_map = builder.build()
 
         for dp in DesignPointGenerator(self.params):
-            dir_leaf = "sched=%s_%s" % (self.name, col_map.encode(dp))
-            dir_path = "%s/%s" % (out_dir, dir_leaf.strip('_'))
+            for trial in xrange(trials):
+                # Create directory name from relevant parameters
+                dir_leaf  = "sched=%s_%s" % (self.name, col_map.encode(dp))
+                dir_leaf  = dir_leaf.strip('_') # If there are none
+                dir_leaf += ("_trial=%s" % trial) if trials > 1 else ""
 
-            if os.path.exists(dir_path):
-                if force:
-                    sh.rmtree(dir_path)
-                else:
-                    print("Skipping existing experiment: '%s'" % dir_path)
-                    continue
+                dir_path  = "%s/%s" % (out_dir, dir_leaf.strip('_'))
 
-            os.mkdir(dir_path)
+                if os.path.exists(dir_path):
+                    if force:
+                        sh.rmtree(dir_path)
+                    else:
+                        print("Skipping existing experiment: '%s'" % dir_path)
+                        continue
 
-            self.__create_exp(dp, dir_path)
+                os.mkdir(dir_path)
+
+                self.__create_exp(dict(dp), dir_path)
 
     def print_help(self):
         s = str(Template("""Generator $name:
