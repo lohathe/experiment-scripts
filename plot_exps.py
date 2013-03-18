@@ -51,7 +51,11 @@ def plot_by_variable(details):
     # formatted plots
     for line_path, line_node in details.node.children.iteritems():
         encoded = line_path[:line_path.index(".csv")]
-        line_config = ColMap.decode(encoded)
+
+        try:
+            line_config = ColMap.decode(encoded)
+        except:
+            line_config = {'name': encoded}
 
         for k, v in line_config.iteritems():
             builder.try_add(k, v)
@@ -115,7 +119,7 @@ def plot_dir(data_dir, out_dir, force):
     if not plot_details:
         return
 
-    procs = min(len(plot_details), cpu_count()/2)
+    procs = min(len(plot_details), max(cpu_count()/2, 1))
     pool  = Pool(processes=procs)
     enum  = pool.imap_unordered(plot_wrapper, plot_details)
 
