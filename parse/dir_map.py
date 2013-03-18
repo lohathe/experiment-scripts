@@ -56,6 +56,9 @@ class DirMap(object):
 
         remove_childless2(self.root)
 
+    def is_empty(self):
+        return not len(self.root.children)
+
     def write(self, out_dir):
         def write2(path, node):
             out_path = "/".join(path)

@@ -2,13 +2,12 @@
 from __future__ import print_function
 
 import config.config as conf
-import run.litmus_util as lu
 import os
 import re
 import shutil
 import traceback
 
-from common import load_params,get_executable
+from common import load_params,get_executable,uname_matches,ft_freq
 from optparse import OptionParser
 from run.executable.executable import Executable
 from run.experiment import Experiment,ExperimentDone
@@ -125,7 +124,7 @@ def load_experiment(sched_file, scheduler, duration, param_file, out_dir):
                        (conf.PARAMS['dur'],    duration)])
 
     # Feather-trace clock frequency saved for accurate overhead parsing
-    ft_freq = lu.ft_freq()
+    ft_freq = ft_freq()
     if ft_freq:
         out_params[conf.PARAMS['cycles']] = ft_freq
 
@@ -146,7 +145,7 @@ def run_exp(name, schedule, scheduler, kernel, duration, work_dir, out_dir):
     proc_entries = []
     executables  = []
 
-    if kernel and not lu.uname_matches(kernel):
+    if kernel and not uname_matches(kernel):
         raise InvalidKernel(kernel)
 
     # Parse values for proc entries
@@ -178,7 +177,7 @@ def run_exp(name, schedule, scheduler, kernel, duration, work_dir, out_dir):
         if re.match(".*spin", real_spin):
             real_args = ['-w'] + real_args + [duration]
 
-        if not lu.is_executable(real_spin):
+        if not is_executable(real_spin):
             raise OSError("Cannot run spin %s: %s" % (real_spin, name))
 
         executables += [Executable(real_spin, real_args)]

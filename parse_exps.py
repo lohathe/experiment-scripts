@@ -22,8 +22,6 @@ def parse_args():
     # TODO: convert data-dir to proper option, clean 'dest' options
     parser = OptionParser("usage: %prog [options] [data_dir]...")
 
-    print("default to no params.py")
-
     parser.add_option('-o', '--out', dest='out',
                       help='file or directory for data output', default='parse-data')
     parser.add_option('-c', '--clean', action='store_true', default=False,
@@ -44,15 +42,15 @@ ExpData = namedtuple('ExpData', ['path', 'params', 'work_dir'])
 
 def get_exp_params(data_dir, cm_builder):
     param_file = "%s/%s" % (data_dir, conf.DEFAULTS['params_file'])
-    if not os.path.isfile:
-        raise Exception("No param file '%s' exists!" % param_file)
+    if os.path.isfile(param_file):
+        params = load_params(param_file)
 
-    params = load_params(param_file)
-
-    # Store parameters in cm_builder, which will track which parameters change
-    # across experiments
-    for key, value in params.iteritems():
-        cm_builder.try_add(key, value)
+        # Store parameters in cm_builder, which will track which parameters change
+        # across experiments
+        for key, value in params.iteritems():
+            cm_builder.try_add(key, value)
+    else:
+         params = {}
 
     # Cycles must be present for feather-trace measurement parsing
     if conf.PARAMS['cycles'] not in params:
@@ -164,16 +162,25 @@ def main():
     if opts.force and os.path.exists(opts.out):
         sh.rmtree(opts.out)
 
-    result_table = result_table.reduce()
+    reduced_table = result_table.reduce()
 
     sys.stderr.write("Writing result...\n")
     if opts.write_map:
         # Write summarized results into map
-        result_table.write_map(opts.out)
+        reduced_table.write_map(opts.out)
     else:
         # Write out csv directories for all variable params
-        dir_map = result_table.to_dir_map()
-        dir_map.write(opts.out)
+        dir_map = reduced_table.to_dir_map()
+
+        # No csvs to write, assume user meant to print out data
+        if dir_map.is_empty():
+            sys.stderr.write("Too little data to make csv files.\n")
+            if not opts.verbose:
+                for key, exp in result_table:
+                    for e in exp:
+                        print(e)
+        else:
+            dir_map.write(opts.out)
 
 if __name__ == '__main__':
     main()

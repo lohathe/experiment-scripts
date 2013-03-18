@@ -1,5 +1,6 @@
 import os
 import re
+import stat
 import subprocess
 import sys
 
@@ -134,3 +135,53 @@ def load_params(fname):
         raise IOError("Invalid param file: %s\n%s" % (fname, e))
 
     return params
+
+
+def num_cpus():
+    '''Return the number of CPUs in the system.'''
+
+    lnx_re = re.compile(r'^(processor|online)')
+    cpus = 0
+
+    with open('/proc/cpuinfo', 'r') as f:
+        for line in f:
+            if lnx_re.match(line):
+                cpus += 1
+    return cpus
+
+def ft_freq():
+    umachine = subprocess.check_output(["uname", "-m"])
+
+    if re.match("armv7", umachine):
+        # Arm V7s use a millisecond timer
+        freq = 1000.0
+    elif re.match("x86", umachine):
+        # X86 timer is equal to processor clock
+        reg = re.compile(r'^cpu MHz\s*:\s*(?P<FREQ>\d+)', re.M)
+        with open('/proc/cpuinfo', 'r') as f:
+            data = f.read()
+
+        match = re.search(reg, data)
+        if not match:
+            raise Exception("Cannot parse CPU frequency from x86 CPU!")
+        freq = int(match.group('FREQ'))
+    else:
+        # You're on your own
+        freq = 0
+    return freq
+
+
+def uname_matches(reg):
+    data = subprocess.check_output(["uname", "-r"])
+    return bool( re.match(reg, data) )
+
+def is_executable(fname):
+    '''Return whether the file passed in is executable'''
+    mode = os.stat(fname)[stat.ST_MODE]
+    return mode & stat.S_IXUSR and mode & stat.S_IRUSR
+
+def is_device(dev):
+    if not os.path.exists(dev):
+        return False
+    mode = os.stat(dev)[stat.ST_MODE]
+    return not (not mode & stat.S_IFCHR)

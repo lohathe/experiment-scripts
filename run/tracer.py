@@ -1,7 +1,7 @@
-from . import litmus_util
 import os
 import config.config as conf
 
+from common import is_device,num_cpus
 from operator import methodcaller
 from run.executable.ftcat import FTcat,Executable
 
@@ -58,7 +58,7 @@ class LogTracer(Tracer):
 
     @staticmethod
     def enabled():
-        return litmus_util.is_device(LogTracer.DEVICE_STR)
+        return is_device(LogTracer.DEVICE_STR)
 
     def stop_tracing(self):
         map(methodcaller('interrupt'), self.bins)
@@ -71,7 +71,7 @@ class SchedTracer(Tracer):
         super(SchedTracer, self).__init__("Sched Trace", output_dir)
 
         if SchedTracer.enabled():
-            for cpu in range(litmus_util.num_cpus()):
+            for cpu in range(num_cpus()):
                 # Executable will close the stdout/stderr files
                 stdout_f = open('%s/st-%d.bin' % (self.output_dir, cpu), 'w')
                 stderr_f = open('%s/st-%d-stderr.txt' % (self.output_dir, cpu), 'w')
@@ -83,7 +83,7 @@ class SchedTracer(Tracer):
 
     @staticmethod
     def enabled():
-        return litmus_util.is_device("%s%d" % (SchedTracer.DEVICE_STR, 0))
+        return is_device("%s%d" % (SchedTracer.DEVICE_STR, 0))
 
 class OverheadTracer(Tracer):
     DEVICE_STR = '/dev/litmus/ft_trace0'
@@ -100,7 +100,7 @@ class OverheadTracer(Tracer):
 
     @staticmethod
     def enabled():
-        return litmus_util.is_device(OverheadTracer.DEVICE_STR)
+        return is_device(OverheadTracer.DEVICE_STR)
 
 class PerfTracer(Tracer):
     def __init__(self, output_dir):

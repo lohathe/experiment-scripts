@@ -128,8 +128,7 @@ class ExpPoint(object):
         self.stats[type] = value
 
     def __str__(self):
-        # return "<ExpPoint-%s>\n%s" % (self.id, dict_str(self.stats))
-        return "<ExpPoint-%s>" % (self.id)
+        return "<ExpPoint-%s>\n%s" % (self.id, dict_str(self.stats))
 
     def get_stats(self):
         return self.stats.keys()

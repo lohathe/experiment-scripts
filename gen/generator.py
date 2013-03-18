@@ -1,11 +1,10 @@
 import gen.rv as rv
 import os
-import run.litmus_util as lu
 import shutil as sh
 
 from Cheetah.Template import Template
 from collections import namedtuple
-from common import get_config_option
+from common import get_config_option,num_cpus
 from config.config import DEFAULTS,PARAMS
 from gen.dp import DesignPointGenerator
 from parse.col_map import ColMapBuilder
@@ -69,7 +68,7 @@ class Generator(object):
         if 'cpus' in params:
             cpus = min(map(int, params['cpus']))
         else:
-            cpus = lu.num_cpus()
+            cpus = num_cpus()
         try:
             config = get_config_option("RELEASE_MASTER") and True
         except:

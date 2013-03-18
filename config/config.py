@@ -1,6 +1,6 @@
 from __future__ import print_function
 import itertools
-from common import get_executable
+from common import get_executable,ft_freq
 
 '''Paths to binaries.'''
 BINS = {'rtspin'    : get_executable('rtspin', 'liblitmus'),
@@ -16,6 +16,7 @@ BINS = {'rtspin'    : get_executable('rtspin', 'liblitmus'),
 
 '''Names of output files.'''
 FILES = {'ft_data'    : 'ft.bin',
+         'ft_matches' : r'(ft.*\.bin)|(.*\.ft)',
          'linux_data' : 'trace.dat',
          'sched_data' : 'st-{}.bin',
          'log_data'   : 'trace.slog'}
@@ -34,7 +35,7 @@ DEFAULTS = {'params_file' : 'params.py',
             'sched_file'  : 'sched.py',
             'duration'    : 10,
             'spin'        : 'rtspin',
-            'cycles'      : 2000}
+            'cycles'      : ft_freq() or 2000}
 
 '''Default sched_trace events (this is all of them).'''
 SCHED_EVENTS = range(501, 513)

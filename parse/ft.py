@@ -63,7 +63,7 @@ def extract_ft_data(result, data_dir, work_dir, cycles):
     data_dir = os.path.abspath(data_dir)
     work_dir = os.path.abspath(work_dir)
 
-    freg = conf.FILES['ft_data'] + "$"
+    freg = conf.FILES['ft_matches'] + "$"
     bins = [f for f in os.listdir(data_dir) if re.match(freg, f)]
 
     if not len(bins):

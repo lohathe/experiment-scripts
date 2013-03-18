@@ -1,7 +1,7 @@
 import sys
 import subprocess
 import signal
-from ..litmus_util import is_executable
+from common import is_executable
 
 class Executable(object):
     '''Parent object that represents an executable for use in task-sets.'''
