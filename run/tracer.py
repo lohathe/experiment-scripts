@@ -37,7 +37,7 @@ class LinuxTracer(Tracer):
 
     @staticmethod
     def enabled():
-        return os.path.exists(LinuxTracer.LITMUS_EVENTS)
+        return conf.BINS['trace-cmd'] and os.path.exists(LinuxTracer.LITMUS_EVENTS)
 
     def stop_tracing(self):
         map(methodcaller('interrupt'), self.bins)

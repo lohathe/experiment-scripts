@@ -9,7 +9,8 @@ BINS = {'rtspin'    : get_executable('rtspin', 'liblitmus'),
         'ftsplit'   : get_executable('ft2csv', 'feather-trace-tools'),
         'ftsort'    : get_executable('ftsort', 'feather-trace-tools'),
         'st_trace'  : get_executable('st_trace', 'feather-trace-tools'),
-        'trace-cmd' : get_executable('trace-cmd', 'rt-kernelshark'),
+        # Option, as not everyone uses kernelshark yet
+        'trace-cmd' : get_executable('trace-cmd', 'rt-kernelshark', True),
         # Optional, as sched_trace is not a publically supported repository
         'st_show'   : get_executable('st_show', 'sched_trace', True)}
 
@@ -32,7 +33,7 @@ PARAMS = {'sched'   : 'scheduler',       # Scheduler used by run_exps
 DEFAULTS = {'params_file' : 'params.py',
             'sched_file'  : 'sched.py',
             'duration'    : 10,
-            'spin'	  : 'rtspin',
+            'spin'        : 'rtspin',
             'cycles'      : 2000}
 
 '''Default sched_trace events (this is all of them).'''
