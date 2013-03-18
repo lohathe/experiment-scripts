@@ -25,6 +25,7 @@ FILES = {'ft_data'    : 'ft.bin',
 PARAMS = {'sched'   : 'scheduler',       # Scheduler used by run_exps
           'dur'     : 'duration',        # Duration of tests in run_exps
           'kernel'  : 'uname',           # Regex of required OS name in run_exps
+          'copts'   : 'config-options',  # Required kernel configuration options
           'cycles'  : 'clock-frequency', # Frequency run_exps was run with
           'tasks'   : 'tasks',           # Number of tasks
           'trial'   : 'trial'            # For multiple exps with same config

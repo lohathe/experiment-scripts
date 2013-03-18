@@ -1,13 +1,14 @@
 #!/usr/bin/env python
 from __future__ import print_function
 
+import common as com
 import config.config as conf
 import os
 import re
 import shutil
 import traceback
 
-from common import load_params,get_executable,uname_matches,ft_freq
+from collections import namedtuple
 from optparse import OptionParser
 from run.executable.executable import Executable
 from run.experiment import Experiment,ExperimentDone
@@ -20,6 +21,16 @@ class InvalidKernel(Exception):
 
     def __str__(self):
         return "Kernel '%s' does not match '%s'." % (self.kernel, self.wanted)
+
+ConfigResult = namedtuple('ConfigResult', ['param', 'wanted', 'actual'])
+class InvalidConfig(Exception):
+    def __init__(self, results):
+        self.results = results
+
+    def __str__(self):
+        rstr = "'%s' - wanted: '%s', found: %s"
+        result = [rstr % (r.actual, r.param, r.wanted) for r in self.results]
+        return "Invalid kernel configuration\n" + result.join("\n")
 
 def parse_args():
     parser = OptionParser("usage: %prog [options] [sched_file]... [exp_dir]...")
@@ -83,6 +94,23 @@ def fix_paths(schedule, exp_dir, sched_file):
 
         schedule['spin'][idx] = (spin, args)
 
+def verify_environment(kernel, copts):
+    if kernel and not com.uname_matches(kernel):
+        raise InvalidKernel(kernel)
+
+    if copts:
+        results = []
+        for param, wanted in copts.iteritems():
+            try:
+                actual = com.get_config_option(param)
+            except IOError:
+                actual = None
+            if not str(wanted) == str(actual):
+                results += [ConfigResult(param, wanted, actual)]
+
+        if results:
+            raise InvalidKernel(results)
+
 def load_experiment(sched_file, scheduler, duration, param_file, out_dir):
     if not os.path.isfile(sched_file):
         raise IOError("Cannot find schedule file: %s" % sched_file)
@@ -97,13 +125,16 @@ def load_experiment(sched_file, scheduler, duration, param_file, out_dir):
       "%s/%s" % (dir_name, conf.DEFAULTS['params_file'])
 
     if os.path.isfile(param_file):
-        params = load_params(param_file)
+        params = com.load_params(param_file)
         scheduler = scheduler or params[conf.PARAMS['sched']]
         duration  = duration  or params[conf.PARAMS['dur']]
 
         # Experiments can specify required kernel name
         if conf.PARAMS['kernel'] in params:
             kernel = params[conf.PARAMS['kernel']]
+        # Or required config options
+        if conf.PARAMS['copts'] in params:
+            copts = params[conf.PARAMS['copts']]
 
     duration = duration or conf.DEFAULTS['duration']
 
@@ -113,7 +144,10 @@ def load_experiment(sched_file, scheduler, duration, param_file, out_dir):
     # Parse schedule file's intentions
     schedule = load_schedule(sched_file)
     work_dir = "%s/tmp" % dir_name
+
     fix_paths(schedule, os.path.split(sched_file)[0], sched_file)
+
+    verify_environment(kernel, copts)
 
     run_exp(exp_name, schedule, scheduler, kernel, duration, work_dir, out_dir)
 
@@ -124,7 +158,7 @@ def load_experiment(sched_file, scheduler, duration, param_file, out_dir):
                        (conf.PARAMS['dur'],    duration)])
 
     # Feather-trace clock frequency saved for accurate overhead parsing
-    ft_freq = ft_freq()
+    ft_freq = com.ft_freq()
     if ft_freq:
         out_params[conf.PARAMS['cycles']] = ft_freq
 
@@ -144,9 +178,6 @@ def load_schedule(fname):
 def run_exp(name, schedule, scheduler, kernel, duration, work_dir, out_dir):
     proc_entries = []
     executables  = []
-
-    if kernel and not uname_matches(kernel):
-        raise InvalidKernel(kernel)
 
     # Parse values for proc entries
     for entry_conf in schedule['proc']:
@@ -172,12 +203,12 @@ def run_exp(name, schedule, scheduler, kernel, duration, work_dir, out_dir):
         # if not conf.BINS[spin]:
         #     raise IndexError("No knowledge of program %s: %s" % (spin, name))
 
-        real_spin = get_executable(spin, "")
+        real_spin = com.get_executable(spin, "")
         real_args = args.split()
         if re.match(".*spin", real_spin):
             real_args = ['-w'] + real_args + [duration]
 
-        if not is_executable(real_spin):
+        if not com.is_executable(real_spin):
             raise OSError("Cannot run spin %s: %s" % (real_spin, name))
 
         executables += [Executable(real_spin, real_args)]
@@ -226,8 +257,10 @@ def main():
         except ExperimentDone:
             done += 1
             print("Experiment '%s' already completed at '%s'" % (exp, out_base))
-        except InvalidKernel:
+        except (InvalidKernel, InvalidConfig) as e:
             invalid += 1
+            print("Invalid environment for experiment '%s'")
+            print(e)
         except:
             print("Failed experiment %s" % exp)
             traceback.print_exc()
@@ -240,7 +273,7 @@ def main():
     print("  Successful:\t\t%d" % succ)
     print("  Failed:\t\t%d" % failed)
     print("  Already Done:\t\t%d" % done)
-    print("  Wrong Kernel:\t\t%d" % invalid)
+    print("  Invalid environment:\t\t%d" % invalid)
 
 
 if __name__ == '__main__':
