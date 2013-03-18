@@ -19,13 +19,10 @@ from parse.col_map import ColMapBuilder
 from multiprocessing import Pool, cpu_count
 
 def parse_args():
-    # TODO: convert data-dir to proper option, clean 'dest' options
     parser = OptionParser("usage: %prog [options] [data_dir]...")
 
     parser.add_option('-o', '--out', dest='out',
                       help='file or directory for data output', default='parse-data')
-    parser.add_option('-c', '--clean', action='store_true', default=False,
-                      dest='clean', help='do not output single-point csvs')
     parser.add_option('-i', '--ignore', metavar='[PARAM...]', default="",
                       help='ignore changing parameter values')
     parser.add_option('-f', '--force', action='store_true', default=False,
@@ -59,7 +56,7 @@ def get_exp_params(data_dir, cm_builder):
     return params
 
 
-def load_exps(exp_dirs, cm_builder, clean):
+def load_exps(exp_dirs, cm_builder, force):
     exps = []
 
     sys.stderr.write("Loading experiments...\n")
@@ -71,7 +68,7 @@ def load_exps(exp_dirs, cm_builder, clean):
         # Used to store error output and debugging info
         work_dir = data_dir + "/tmp"
 
-        if os.path.exists(work_dir) and clean:
+        if os.path.exists(work_dir) and force:
             sh.rmtree(work_dir)
         if not os.path.exists(work_dir):
             os.mkdir(work_dir)
