@@ -6,7 +6,7 @@ import shutil as sh
 from Cheetah.Template import Template
 from collections import namedtuple
 from common import get_config_option
-from config.config import DEFAULTS
+from config.config import DEFAULTS,PARAMS
 from gen.dp import DesignPointGenerator
 from parse.col_map import ColMapBuilder
 
@@ -199,14 +199,14 @@ class Generator(object):
                 os.mkdir(dir_path)
 
                 if trials > 1:
-                    dp['trial'] = trial
+                    dp[PARAMS['trial']] = trial
                 self.out_dir = dir_path
 
                 self._create_exp(dict(dp))
 
                 del(self.out_dir)
-                if 'trial' in dp:
-                    del dp['trial']
+                if PARAMS['trial'] in dp:
+                    del dp[PARAMS['trial']]
 
 
     def print_help(self):

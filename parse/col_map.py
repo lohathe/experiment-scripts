@@ -14,7 +14,8 @@ class ColMapBuilder(object):
         self.value_map[column].add( value )
 
     def try_remove(self, column):
-        del(self.value_map[column])
+        if column in self.value_map:
+            del(self.value_map[column])
 
 class ColMap(object):
     def __init__(self, col_list, values = None):
