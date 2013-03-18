@@ -142,7 +142,11 @@ def main():
         os.mkdir(opts.out_dir)
 
     for dir in args:
-        plot_dir(dir, opts.out_dir, opts.force)
+        if len(args) > 1:
+            out_dir = "%s/%s" % (opts.out_dir, os.path.split(dir)[1])
+        else:
+            out_dir = opts.out_dir
+        plot_dir(dir, out_dir, opts.force)
 
 if __name__ == '__main__':
     main()

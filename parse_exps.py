@@ -134,7 +134,7 @@ def main():
 
     sys.stderr.write("Parsing data...\n")
 
-    procs = min(len(exps), cpu_count()/2)
+    procs = min(len(exps), max(cpu_count()/2, 1))
     pool = Pool(processes=procs)
     pool_args = zip(exps, [opts.force]*len(exps))
     enum = pool.imap_unordered(parse_exp, pool_args, 1)
@@ -171,8 +171,8 @@ def main():
 
         # No csvs to write, assume user meant to print out data
         if dir_map.is_empty():
-            sys.stderr.write("Too little data to make csv files.\n")
             if not opts.verbose:
+                sys.stderr.write("Too little data to make csv files.\n")
                 for key, exp in result_table:
                     for e in exp:
                         print(e)

@@ -60,7 +60,7 @@ class ReducedTupleTable(TupleTable):
                     if not base_type in measurement:
                         continue
                     # Ex: release/num_tasks/measured-max/avg/x=5.csv
-                    leaf = self.col_map.encode(kv) + ".csv"
+                    leaf = (self.col_map.encode(kv) or "line") + ".csv"
                     path = [ stat, variable, base_type, summary_type, leaf ]
                     result = measurement[base_type]
 
