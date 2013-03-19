@@ -15,12 +15,11 @@ from run.experiment import Experiment,ExperimentDone
 from run.proc_entry import ProcEntry
 
 class InvalidKernel(Exception):
-    def __init__(self, kernel, wanted):
+    def __init__(self, kernel):
         self.kernel = kernel
-        self.wanted = wanted
 
     def __str__(self):
-        return "Kernel '%s' does not match '%s'." % (self.kernel, self.wanted)
+        return "Kernel name does not match '%s'." % self.kernel
 
 ConfigResult = namedtuple('ConfigResult', ['param', 'wanted', 'actual'])
 class InvalidConfig(Exception):
@@ -119,7 +118,7 @@ def load_experiment(sched_file, scheduler, duration, param_file, out_dir):
     exp_name = os.path.split(dir_name)[1] + "/" + fname
 
     params = {}
-    kernel = ""
+    kernel = copts = ""
 
     param_file = param_file or \
       "%s/%s" % (dir_name, conf.DEFAULTS['params_file'])
@@ -259,7 +258,7 @@ def main():
             print("Experiment '%s' already completed at '%s'" % (exp, out_base))
         except (InvalidKernel, InvalidConfig) as e:
             invalid += 1
-            print("Invalid environment for experiment '%s'")
+            print("Invalid environment for experiment '%s'" % exp)
             print(e)
         except:
             print("Failed experiment %s" % exp)
@@ -273,7 +272,7 @@ def main():
     print("  Successful:\t\t%d" % succ)
     print("  Failed:\t\t%d" % failed)
     print("  Already Done:\t\t%d" % done)
-    print("  Invalid environment:\t\t%d" % invalid)
+    print("  Invalid Environment:\t%d" % invalid)
 
 
 if __name__ == '__main__':
