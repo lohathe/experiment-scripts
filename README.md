@@ -191,7 +191,7 @@ $ echo "{'uname': r'.*litmus.*'}" > params.py
 # run_exps.py will now succeed
 ```
 
-The second property is kernel configuration options. These assume the configuration is stored at `/boot/config-$(uname -r)`. You can specify these in `params.py` like so:
+The second property is kernel configuration options. These assume the configuration is stored at `/boot/config-$(uname -r)`. You can specify these in `params.py`. In the following example, the experiment will only run on an ARM system with the release master enabled:
 
 ```python
 {'config-options':{
@@ -204,13 +204,13 @@ The second property is kernel configuration options. These assume the configurat
 ## gen_exps.py
 *Usage*: `gen_exps.py [options] [files...] [generators...] [param=val[,val]...]`
 
-*Output*:   OUT_DIR/EXP_DIRS which each contain sched.py and params.py
+*Output*: `OUT_DIR/EXP_DIRS` which each contain `sched.py` and `params.py`
 
 *Defaults*: `generators = G-EDF P-EDF C-EDF`, `OUT_DIR = exps/`
 
 This script uses *generators*, one for each LITMUS scheduler supported, which each have different properties which can be varied to generate different types of schedules. Each of these properties has a default value which can be modified on the command line for quick and easy experiment generation.
 
-This script as written should be used to create debugging task sets, but not for creating task sets for experiments shown in papers. That is because the safety features of `run_exps.py` described above (uname, config-options) are not used here. If you are creating experiments for a paper, you should create your own generator which outputs values for the `config-options` required for your plugin so that you cannot ruin your experiments at run time. Trust me, you will.
+This script as written should be used to create debugging task sets, but not for creating task sets for experiments shown in papers. That is because the safety features of `run_exps.py` described above (`uname`, `config-options`) are not used here. If you are creating experiments for a paper, you should create your own generator which outputs values for the `config-options` required for your plugin so that you cannot ruin your experiments at run time. Trust me, you will.
 
 The `-l` option lists the supported generators which can be specified:
 
@@ -289,22 +289,22 @@ sched=PSN-EDF_trial=0/  sched=PSN-EDF_trial=1/  sched=PSN-EDF_trial=2/
 sched=PSN-EDF_trial=3/  sched=PSN-EDF_trial=4/
 ```
 
-IV. PARSE_EXPS
+## parse_exps.py
 *Usage*: `parse_exps.py [options] [data_dir1] [data_dir2]...`
 
-where data_dirs contain feather-trace and sched-trace data, e.g. `ft.bin`, `mysched.ft`, or `st-*.bin`.
+where the `data_dirx` contain feather-trace and sched-trace data, e.g. `ft.bin`, `mysched.ft`, or `st-*.bin`.
 
 *Output*: print out all parsed data or `OUT_FILE` where `OUT_FILE` is a python map of the data or `OUT_DIR/[FIELD]*/[PARAM]/[TYPE]/[TYPE]/[LINE].csv`, depending on input.
 
-The goal is to create csv files which record how varying PARAM changes the value of FIELD. Only PARAMs which vary are considered.
+The goal is to create csv files which record how varying `PARAM` changes the value of `FIELD`. Only `PARAM`s which vary are considered.
 
-FIELD is a parsed value, e.g. 'RELEASE' overhead or 'miss-ratio'. `PARAM` is a parameter which we are going to vary, e.g. 'tasks' A single `LINE` is created for every configuration of parameters other than `PARAM`.
+`FIELD` is a parsed value, e.g. 'RELEASE' overhead or 'miss-ratio'. `PARAM` is a parameter which we are going to vary, e.g. 'tasks'. A single `LINE` is created for every configuration of parameters other than `PARAM`.
 
-`TYPE is the type of measurement, i.e. Max, Min, Avg, or Var[iance]. The two types are used to differentiate between measurements across tasks in a single taskset, and measurements across all tasksets. E.g. `miss-ratio/*/Max/Avg` is the maximum of all the average miss ratios for each task set, while `miss-ratio/*/Avg/Max` is the average of the maximum miss ratios for each task set.
+`TYPE` is the statistic of the measurement, i.e. Max, Min, Avg, or Var[iance]. The two types are used to differentiate between measurements across tasks in a single taskset, and measurements across all tasksets. E.g. `miss-ratio/*/Max/Avg` is the maximum of all the average miss ratios for each task set, while `miss-ratio/*/Avg/Max` is the average of the maximum miss ratios for each task set.
 
 *Defaults*: `OUT_DIR, OUT_FILE = parse-data`, `data_dir1 = .`
 
-This script reads a directory or directories, parses the binary files inside for feather-trace or sched-trace data, then summarizes and organizes the results for output. The output can be to the console, to a python map, or to a directory tree of csvs (the default, ish). The python map (using `-m`) can be used for schedulability tests. The directory tree can be used to look at how changing parameters affects certain measurements.
+This script reads a directory or directories, parses the binary files inside for feather-trace or sched-trace data, then summarizes and organizes the results for output. The output can be to the console, to a python map, or to a directory tree of csvs (default). The python map (using `-m`) can be used for schedulability tests. The directory tree can be used to look at how changing parameters affects certain measurements.
 
 The script will use half the current computers CPUs to process data.
 
@@ -313,13 +313,13 @@ In the following example, too little data was found to create csv files, so the 
 ```bash
 $ ls run-data/
 taskset_scheduler=C-FL-split-L3_host=ludwig_n=10_idx=05_split=randsplit.ft
-$ parse_exps.py run-data/
+$ parse_exps.py
 Loading experiments...
 Parsing data...
  0.00%
 Writing result...
 Too little data to make csv files.
-<ExpPoint-/home/hermanjl/tmp/run-data>
+<ExpPoint-/home/hermanjl/tmp>
                  CXS:  Avg:     5.053  Max:    59.925  Min:     0.241
                SCHED:  Avg:     4.410  Max:    39.350  Min:     0.357
                 TICK:  Avg:     1.812  Max:    21.380  Min:     0.241
@@ -369,21 +369,21 @@ The second command will also have run faster than the first. This is because `pa
 All output from the *feather-trace-tools* programs used to parse data is stored in the `tmp/` directories created in the input directories.  If the *sched_trace* repo is found in the users `PATH`, `st_show` will be used to create a human-readable version of the sched-trace data which will also be stored there.
 
 ## plot_exps.py
-*Usage*: `plot_exps.py [options] [csv_dir]...`
+*Usage*: `plot_exps.py [OPTIONS] [CSV_DIR]...`
 
-where a csv dir is a directory or directory of directories (and so on) containing csvs, like:
+where a `CSV_DIR` is a directory or directory of directories (and so on) containing csvs, like:
 ```
-csv_dir/[subdirs/...]
+CSV_DIR/[SUBDIR/...]
 	line1.csv
 	line2.csv
 	line3.csv
 ```
 
-*Outputs*: `OUT_DIR/[csv_dir/]*[plot]*.pdf`
+*Outputs*: `OUT_DIR/[CSV_DIR/]*[PLOT]*.pdf`
 
-where a single plot exists for each directory of csvs, with a line for for each csv file in that directory. If only a single csv_dir is specified, all plots are placed directly under `OUT_DIR`.
+where a single plot exists for each directory of csvs, with a line for for each csv file in that directory. If only a single `CSV_DIR` is specified, all plots are placed directly under `OUT_DIR`.
 
-*Defaults*: `OUT_DIR = plot-data/`, `csv_dir = .`
+*Defaults*: `OUT_DIR = plot-data/`, `CSV_DIR = .`
 
 This script takes directories of csvs (or directories formatted as specified below) and creates a pdf plot of each csv directory found. A line is created for each .csv file contained in a plot. [Matplotlib][matplotlib] is used to do the plotting. The script will use half the current computers CPUs to process data.
 
