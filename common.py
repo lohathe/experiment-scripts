@@ -50,6 +50,12 @@ def get_config_option(option):
     else:
         raise IOError("No config file exists!")
 
+def try_get_config_option(option, default):
+    try:
+        get_config_option(option)
+    except:
+        return default
+
 def recordtype(typename, field_names, default=0):
     ''' Mutable namedtuple. Recipe from George Sakkis of MIT.'''
     field_names = tuple(map(str, field_names))
@@ -127,10 +133,7 @@ def load_params(fname):
     with open(fname, 'r') as f:
         data = f.read()
     try:
-        parsed = eval(data)
-        # Convert to defaultdict
-        for k in parsed:
-            params[k] = str(parsed[k])
+        params = eval(data)
     except Exception as e:
         raise IOError("Invalid param file: %s\n%s" % (fname, e))
 

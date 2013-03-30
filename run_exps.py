@@ -27,15 +27,24 @@ class InvalidConfig(Exception):
         self.results = results
 
     def __str__(self):
-        rstr = "'%s' - wanted: '%s', found: %s"
-        result = [rstr % (r.actual, r.param, r.wanted) for r in self.results]
-        return "Invalid kernel configuration\n" + result.join("\n")
+        rstr = "'%s'%swanted: '%s', found: %s"
+        messages = []
+        for r in self.results:
+            # For pretty alignment
+            tabs = (3 - len(r.param)/8)
+            messages += [rstr % (r.param, '\t'*tabs, r.wanted, r.actual)]
+
+        return "Invalid kernel configuration " +\
+               "(ignore configuration with -i option).\n" + "\n".join(messages)
 
 def parse_args():
     parser = OptionParser("usage: %prog [options] [sched_file]... [exp_dir]...")
 
     parser.add_option('-s', '--scheduler', dest='scheduler',
                       help='scheduler for all experiments')
+    parser.add_option('-i', '--ignore-environment', dest='ignore',
+                      action='store_true', default=False,
+                      help='run experiments even in invalid environments ')
     parser.add_option('-d', '--duration', dest='duration', type='int',
                       help='duration (seconds) of tasks')
     parser.add_option('-o', '--out-dir', dest='out_dir',
@@ -87,7 +96,7 @@ def fix_paths(schedule, exp_dir, sched_file):
             if os.path.exists(abspath):
                 args = args.replace(arg, abspath)
                 break
-            elif re.match(r'.*\w+\.\w+', arg):
+            elif re.match(r'.*\w+\.[a-zA-Z]\w*', arg):
                 print("WARNING: non-existent file '%s' may be referenced:\n\t%s"
                       % (arg, sched_file))
 
@@ -108,9 +117,10 @@ def verify_environment(kernel, copts):
                 results += [ConfigResult(param, wanted, actual)]
 
         if results:
-            raise InvalidKernel(results)
+            raise InvalidConfig(results)
 
-def load_experiment(sched_file, scheduler, duration, param_file, out_dir):
+def load_experiment(sched_file, scheduler, duration,
+                    param_file, out_dir, ignore):
     if not os.path.isfile(sched_file):
         raise IOError("Cannot find schedule file: %s" % sched_file)
 
@@ -146,7 +156,8 @@ def load_experiment(sched_file, scheduler, duration, param_file, out_dir):
 
     fix_paths(schedule, os.path.split(sched_file)[0], sched_file)
 
-    verify_environment(kernel, copts)
+    if not ignore:
+        verify_environment(kernel, copts)
 
     run_exp(exp_name, schedule, scheduler, kernel, duration, work_dir, out_dir)
 
@@ -251,7 +262,8 @@ def main():
             path = "%s/%s" % (path, opts.sched_file)
 
         try:
-            load_experiment(path, scheduler, duration, param_file, out_dir)
+            load_experiment(path, scheduler, duration, param_file,
+                            out_dir, opts.ignore)
             succ += 1
         except ExperimentDone:
             done += 1

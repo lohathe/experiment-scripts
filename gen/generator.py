@@ -1,10 +1,11 @@
 import gen.rv as rv
 import os
+import pprint
+import schedcat.generator.tasks as tasks
 import shutil as sh
 
 from Cheetah.Template import Template
-from collections import namedtuple
-from common import get_config_option,num_cpus
+from common import get_config_option,num_cpus,recordtype
 from config.config import DEFAULTS,PARAMS
 from gen.dp import DesignPointGenerator
 from parse.col_map import ColMapBuilder
@@ -21,6 +22,7 @@ NAMED_UTILIZATIONS = {
     'uni-light'     : rv.uniform(0.001, 0.1),
     'uni-medium'    : rv.uniform(  0.1, 0.4),
     'uni-heavy'     : rv.uniform(  0.5, 0.9),
+    'uni-mixed'     : rv.uniform(0.001, .4),
 
     'exp-light'     : rv.exponential(0, 1, 0.10),
     'exp-medium'    : rv.exponential(0, 1, 0.25),
@@ -36,15 +38,12 @@ NAMED_UTILIZATIONS = {
 
 '''Components of Cheetah template for schedule file'''
 TP_RM = """#if $release_master
-release_master{1}
+release_master{0}
 #end if"""
-TP_TBASE = """#for $t in $task_set
-{} $t.cost $t.period
-#end for"""
-TP_GLOB_TASK = TP_TBASE.format("")
-TP_PART_TASK = TP_TBASE.format("-p $t.cpu")
 
-GenOption = namedtuple('GenOption', ['name', 'types', 'default', 'help'])
+GenOptionT = recordtype('GenOption', ['name', 'types', 'default', 'help', 'hidden'])
+def GenOption(name, types, default, help, hidden = False):
+    return GenOptionT(name, types, default, help, hidden)
 
 class Generator(object):
     '''Creates all combinations @options specified by @params.
@@ -92,17 +91,33 @@ class Generator(object):
     def _create_dist(self, name, value, named_dists):
         '''Attempt to create a distribution representing the data in @value.
         If @value is a string, use it as a key for @named_dists.'''
-        name = "%s distribution" % name
         # A list of values
         if type(value) == type([]):
             map(lambda x : self.__check_value(name, x, [float, int]), value)
             return rv.uniform_choice(value)
         elif type(value) in [float, int]:
             return lambda : value
-        elif value in named_dists:
+        elif named_dists and value in named_dists:
             return named_dists[value]
         else:
             raise ValueError("Invalid %s value: %s" % (name, value))
+
+    def _create_taskset(self, params, periods, utils, max_util = None):
+        tg = tasks.TaskGenerator(period=periods, util=utils)
+        ts = []
+        tries = 0
+        while len(ts) != params['num_tasks'] and tries < 100:
+            ts = tg.make_task_set(max_tasks = params['num_tasks'], max_util=max_util)
+            tries += 1
+        if len(ts) != params['num_tasks']:
+            print(("Only created task set of size %d < %d for params %s. " +
+                   "Switching to light utilization.") %
+                  (len(ts), params['num_tasks'], params))
+            print("Switching to light util. This usually means the " +
+                  "utilization distribution is too agressive.")
+            return self._create_taskset(params, periods, NAMED_UTILIZATIONS['uni-light'],
+                                        max_util)
+        return ts
 
     def _write_schedule(self, params):
         '''Write schedule file using current template for @params.'''
@@ -110,18 +125,31 @@ class Generator(object):
         with open(sched_file, 'wa') as f:
             f.write(str(Template(self.template, searchList=[params])))
 
+
     def _write_params(self, params):
         '''Write out file with relevant parameters.'''
+        # Don't include this in the parameters. It will be automatically added
+        # in run_exps.py
+        if 'num_tasks' in params:
+            num_tasks = params.pop('num_tasks')
+        else:
+            num_tasks = 0
+
         exp_params_file = self.out_dir + "/" + DEFAULTS['params_file']
         with open(exp_params_file, 'wa') as f:
             params['scheduler'] = self.name
-            f.write(str(params))
+            pprint.pprint(params, f)
+
+        if num_tasks:
+            params['num_tasks'] = num_tasks
 
     def __setup_params(self, params):
         '''Set default parameter values and check that values are valid.'''
         for option in self.options:
             if option.name not in params:
                 params[option.name] = option.default
+            else:
+                option.hidden = True
             params[option.name] = self._check_value(option.name,
                                                     option.types,
                                                     params[option.name])
@@ -207,14 +235,16 @@ class Generator(object):
                 if PARAMS['trial'] in dp:
                     del dp[PARAMS['trial']]
 
+    HELP_INDENT = 17
 
     def print_help(self):
+        display_options = [o for o in self.options if not o.hidden]
         s = str(Template("""Generator $name:
         #for $o in $options
         $o.name -- $o.help
         \tDefault: $o.default
         \tAllowed: $o.types
-        #end for""", searchList=vars(self)))
+        #end for""", searchList={'name':self.name, 'options':display_options}))
 
         # Has to be an easier way to print this out...
         for line in s.split("\n"):
@@ -223,8 +253,8 @@ class Generator(object):
             for word in line.split(", "):
                 i += len(word)
                 res += [word]
-                if i > 80:
+                if i > 80 and len(word) < 80:
                     print(", ".join(res[:-1]))
-                    res = ["\t\t "+res[-1]]
-                    i = line.index("'")
+                    res = [" "*Generator.HELP_INDENT +res[-1]]
+                    i = Generator.HELP_INDENT + len(word)
             print(", ".join(res))
