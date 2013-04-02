@@ -36,7 +36,7 @@ class EdfGenerator(gen.Generator):
 
         self._customize(ts, exp_params)
 
-        self._write_schedule(dict(exp_params.items() + ('task_set', ts)))
+        self._write_schedule(dict(exp_params.items() + [('task_set', ts)]))
         self._write_params(exp_params)
 
     def _customize(self, taskset, exp_params):

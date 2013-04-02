@@ -7,7 +7,7 @@ class Style(namedtuple('SS', ['marker', 'line', 'color'])):
 
 class StyleMap(object):
     '''Maps configs (dicts) to specific line styles.'''
-    DEFAULT = Style('', '', 'k')
+    DEFAULT = Style('', '-', 'k')
 
     def __init__(self, col_list, col_values):
         '''Assign (some) columns in @col_list to fields in @Style to vary, and
@@ -15,7 +15,8 @@ class StyleMap(object):
         self.value_map = {}
         self.field_map = {}
 
-        for field, values in self.__get_all()._asdict().iteritems():
+        # TODO: undo this, switch to popping mechanism
+        for field, values in reversed([x for x in self.__get_all()._asdict().iteritems()]):
             if not col_list:
                 break
 
@@ -51,7 +52,6 @@ class StyleMap(object):
         key = []
 
         for column, values in self.value_map.iteritems():
-            # print("***%s, %s" % column, values)
             for v in values.keys():
                 sdict = dict([(column, v)])
                 style = self.get_style(sdict)

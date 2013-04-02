@@ -94,7 +94,7 @@ def main():
         print("Creating experiments using %s generator..." % gen_name)
 
         params = dict(gen_params.items() + global_params.items())
-        generator = GENERATORS[gen_name](params)
+        generator = GENERATORS[gen_name](params=params)
 
         generator.create_exps(opts.out_dir, opts.force, opts.trials)
 

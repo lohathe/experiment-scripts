@@ -126,8 +126,8 @@ def main():
     if opts.ignore:
         for param in opts.ignore.split(","):
             builder.try_remove(param)
-        # Always average multiple trials
-        builder.try_remove(conf.PARAMS['trial'])
+    # Always average multiple trials
+    builder.try_remove(conf.PARAMS['trial'])
 
     col_map = builder.build()
     result_table = TupleTable(col_map)

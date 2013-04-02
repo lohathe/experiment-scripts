@@ -68,7 +68,7 @@ def convert_data(data):
             r"(?P<ENTRY>[\w\-\/]+)"
               r"\s*{\s*(?P<CONTENT>.*?)\s*?}$)|"
         r"(?P<SPIN>^"
-            r"(?:(?P<TYPE>[^\d\-]\w*?) )?\s*"
+            r"(?:(?P<TYPE>[^\d\-\s]\w*?) )?\s*"
             r"(?P<ARGS>[\w\-_\d\. \=]+)\s*$)",
         re.S|re.I|re.M)
 

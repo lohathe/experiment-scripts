@@ -16,7 +16,7 @@ BINS = {'rtspin'    : get_executable('rtspin', 'liblitmus'),
 
 '''Names of output files.'''
 FILES = {'ft_data'    : 'ft.bin',
-         'ft_matches' : r'(ft.*\.bin)|(.*\.ft)',
+         'ft_matches' : r'(ft.*\.bin$)|(.*\.ft)',
          'linux_data' : 'trace.dat',
          'sched_data' : 'st-{}.bin',
          'log_data'   : 'trace.slog'}
