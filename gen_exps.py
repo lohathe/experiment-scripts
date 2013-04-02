@@ -6,14 +6,12 @@ import re
 import shutil as sh
 
 from gen.edf_generators import GedfGenerator,PedfGenerator,CedfGenerator
-from gen.mc_generators import McGenerator
 from optparse import OptionParser
 
 # There has to be a better way to do this...
 GENERATORS = {'C-EDF':CedfGenerator,
               'P-EDF':PedfGenerator,
-              'G-EDF':GedfGenerator,
-              'MC':McGenerator}
+              'G-EDF':GedfGenerator}
 
 def parse_args():
     parser = OptionParser("usage: %prog [options] [files...] "
