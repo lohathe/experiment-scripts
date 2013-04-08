@@ -52,7 +52,7 @@ class Experiment(object):
             self.log("Enabling sched_trace")
             self.tracers.append( SchedTracer(working_dir) )
         if LinuxTracer.enabled():
-            self.log("Enabling trace-cmd / ftrace / kernelshark")
+            self.log("Enabling trace-cmd")
             self.tracers.append( LinuxTracer(working_dir) )
         if LogTracer.enabled():
             self.log("Enabling logging")

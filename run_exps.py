@@ -6,6 +6,7 @@ import config.config as conf
 import os
 import re
 import shutil
+import sys
 import traceback
 
 from collections import namedtuple
@@ -56,6 +57,9 @@ def parse_args():
                       default=conf.DEFAULTS['sched_file'])
     parser.add_option('-f', '--force', action='store_true', default=False,
                       dest='force', help='overwrite existing data')
+    parser.add_option('-j', '--jabber', metavar='username@domain',
+                      dest='jabber', default=None,
+                      help='send a jabber message when an experiment completes')
 
     return parser.parse_args()
 
@@ -120,7 +124,7 @@ def verify_environment(kernel, copts):
             raise InvalidConfig(results)
 
 def load_experiment(sched_file, scheduler, duration,
-                    param_file, out_dir, ignore):
+                    param_file, out_dir, ignore, jabber):
     if not os.path.isfile(sched_file):
         raise IOError("Cannot find schedule file: %s" % sched_file)
 
@@ -160,6 +164,9 @@ def load_experiment(sched_file, scheduler, duration,
         verify_environment(kernel, copts)
 
     run_exp(exp_name, schedule, scheduler, kernel, duration, work_dir, out_dir)
+
+    if jabber:
+        jabber.send("Completed '%s'" % exp_name)
 
     # Save parameters used to run experiment in out_dir
     out_params = dict(params.items() +
@@ -228,6 +235,16 @@ def run_exp(name, schedule, scheduler, kernel, duration, work_dir, out_dir):
 
     exp.run_exp()
 
+def setup_jabber(target):
+    try:
+        from run.jabber import Jabber
+
+        return Jabber(target)
+    except ImportError:
+        sys.stderr.write("Failed to import jabber. Is python-xmpppy "+\
+                         "installed?\nDisabling Jabber messaging.\n")
+        return None
+
 def main():
     opts, args = parse_args()
 
@@ -248,6 +265,11 @@ def main():
     failed = 0
     invalid = 0
 
+    if opts.jabber:
+        jabber = setup_jabber(opts.jabber)
+    else:
+        jabber = None
+
     for exp in args:
         path = "%s/%s" % (os.getcwd(), exp)
         out_dir = "%s/%s" % (out_base, os.path.split(exp.strip('/'))[1])
@@ -263,7 +285,7 @@ def main():
 
         try:
             load_experiment(path, scheduler, duration, param_file,
-                            out_dir, opts.ignore)
+                            out_dir, opts.ignore, jabber)
             succ += 1
         except ExperimentDone:
             done += 1
