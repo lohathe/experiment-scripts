@@ -51,14 +51,14 @@ class Generator(object):
     This class also performs checks of parameter values and prints out help.
     All subclasses must implement _create_exp.
     '''
-    def __init__(self, name, templates, options, params):
+    def __init__(self, scheduler, templates, options, params):
         self.options = self.__make_options(params) + options
 
         self.__setup_params(params)
 
-        self.params   = params
-        self.template = "\n".join([TP_RM] + templates)
-        self.name     = name
+        self.params    = params
+        self.template  = "\n".join([TP_RM] + templates)
+        self.scheduler = scheduler
 
     def __make_options(self, params):
         '''Return generic Litmus options.'''
@@ -137,7 +137,7 @@ class Generator(object):
 
         exp_params_file = self.out_dir + "/" + DEFAULTS['params_file']
         with open(exp_params_file, 'wa') as f:
-            params['scheduler'] = self.name
+            params['scheduler'] = self.scheduler
             pprint.pprint(params, f)
 
         if tasks:
@@ -210,7 +210,7 @@ class Generator(object):
         for dp in DesignPointGenerator(self.params):
             for trial in xrange(trials):
                 # Create directory name from relevant parameters
-                dir_leaf  = "sched=%s_%s" % (self.name, col_map.encode(dp))
+                dir_leaf  = "sched=%s_%s" % (self.scheduler, col_map.encode(dp))
                 dir_leaf  = dir_leaf.strip('_') # If there are none
                 dir_leaf += ("_trial=%s" % trial) if trials > 1 else ""
 
@@ -239,12 +239,12 @@ class Generator(object):
 
     def print_help(self):
         display_options = [o for o in self.options if not o.hidden]
-        s = str(Template("""Generator $name:
+        s = str(Template("""scheduler $scheduler:
         #for $o in $options
         $o.name -- $o.help
         \tDefault: $o.default
         \tAllowed: $o.types
-        #end for""", searchList={'name':self.name, 'options':display_options}))
+        #end for""", searchList={'scheduler':self.scheduler, 'options':display_options}))
 
         # Has to be an easier way to print this out...
         for line in s.split("\n"):
@@ -258,3 +258,12 @@ class Generator(object):
                     res = [" "*Generator.HELP_INDENT +res[-1]]
                     i = Generator.HELP_INDENT + len(word)
             print(", ".join(res))
+
+
+generators = {}
+
+def register_generator(name, clazz):
+    generators[name] = clazz
+
+def get_generators():
+    return generators

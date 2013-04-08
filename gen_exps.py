@@ -1,17 +1,13 @@
 #!/usr/bin/env python
 from __future__ import print_function
 
+import gen.generator as gen
 import os
 import re
 import shutil as sh
+import sys
 
-from gen.edf_generators import GedfGenerator,PedfGenerator,CedfGenerator
 from optparse import OptionParser
-
-# There has to be a better way to do this...
-GENERATORS = {'C-EDF':CedfGenerator,
-              'P-EDF':PedfGenerator,
-              'G-EDF':GedfGenerator}
 
 def parse_args():
     parser = OptionParser("usage: %prog [options] [files...] "
@@ -51,13 +47,14 @@ def main():
 
     # Print generator information on the command line
     if opts.list_gens:
-        print(", ".join(GENERATORS.keys()))
+        print(", ".join(gen.get_generators()))
     if opts.described != None:
         for generator in opts.described.split(','):
-            if generator not in GENERATORS:
+            if generator not in gen.get_generators():
                 print("No generator '%s'" % generator)
             else:
-                GENERATORS[generator]().print_help()
+                sys.stdout.write("Generator '%s', " % generator)
+                gen.get_generators()[generator]().print_help()
     if opts.list_gens or opts.described:
         return 0
 
@@ -65,10 +62,9 @@ def main():
 
     # Ensure some generator is loaded
     args = list(set(args) - set(params))
-    #TODO: get every loaded plugin, try and use that generator
-    args = args or ['C-EDF', 'G-EDF', 'P-EDF']
+    args = args or gen.get_generators().keys()
 
-    # Split into files to load, named generators
+    # Split into files to load and named generators
     files = filter(os.path.exists, args)
     gen_list = list(set(args) - set(files))
 
@@ -86,13 +82,15 @@ def main():
         os.mkdir(opts.out_dir)
 
     for gen_name, gen_params in exp_sets:
-        if gen_name not in GENERATORS:
-            raise ValueError("Invalid generator name: %s" % gen_name)
+        if gen_name not in gen.get_generators():
+            raise ValueError("Invalid generator '%s'" % gen_name)
 
         print("Creating experiments using %s generator..." % gen_name)
 
         params = dict(gen_params.items() + global_params.items())
-        generator = GENERATORS[gen_name](params=params)
+        clazz  = gen.get_generators()[gen_name]
+
+        generator = clazz(params=params)
 
         generator.create_exps(opts.out_dir, opts.force, opts.trials)
 

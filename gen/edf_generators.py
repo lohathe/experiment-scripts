@@ -9,8 +9,8 @@ TP_PART_TASK = TP_TBASE.format("-p $t.cpu")
 
 class EdfGenerator(gen.Generator):
     '''Creates sporadic task sets with the most common Litmus options.'''
-    def __init__(self, name, templates, options, params):
-        super(EdfGenerator, self).__init__(name, templates,
+    def __init__(self, scheduler, templates, options, params):
+        super(EdfGenerator, self).__init__(scheduler, templates,
                                            self.__make_options() + options,
                                            params)
 
@@ -45,8 +45,8 @@ class EdfGenerator(gen.Generator):
 
 
 class PartitionedGenerator(EdfGenerator):
-    def __init__(self, name, templates, options, params):
-        super(PartitionedGenerator, self).__init__(name,
+    def __init__(self, scheduler, templates, options, params):
+        super(PartitionedGenerator, self).__init__(scheduler,
             templates + [TP_PART_TASK], options, params)
 
     def _customize(self, taskset, exp_params):
