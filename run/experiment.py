@@ -3,7 +3,6 @@ import time
 import run.litmus_util as lu
 import shutil as sh
 from operator import methodcaller
-from run.tracer import SchedTracer, LogTracer, PerfTracer, LinuxTracer, OverheadTracer
 
 class ExperimentException(Exception):
     '''Used to indicate when there are problems with an experiment.'''
@@ -32,7 +31,8 @@ class Experiment(object):
     '''Execute one task-set and save the results. Experiments have unique IDs.'''
     INTERRUPTED_DIR = ".interrupted"
 
-    def __init__(self, name, scheduler, working_dir, finished_dir, proc_entries, executables):
+    def __init__(self, name, scheduler, working_dir, finished_dir,
+                 proc_entries, executables, tracer_types):
         '''Run an experiment, optionally wrapped in tracing.'''
 
         self.name = name
@@ -46,27 +46,17 @@ class Experiment(object):
 
         self.__make_dirs()
         self.__assign_executable_cwds()
+        self.__setup_tracers(tracer_types)
 
-        self.tracers = []
-        if SchedTracer.enabled():
-            self.log("Enabling sched_trace")
-            self.tracers.append( SchedTracer(working_dir) )
-        if LinuxTracer.enabled():
-            self.log("Enabling trace-cmd")
-            self.tracers.append( LinuxTracer(working_dir) )
-        if LogTracer.enabled():
-            self.log("Enabling logging")
-            self.tracers.append( LogTracer(working_dir) )
-        if PerfTracer.enabled():
-            self.log("Tracking CPU performance counters")
-            self.tracers.append( PerfTracer(working_dir) )
 
-        # Overhead trace must be handled seperately, see __run_tasks
-        if OverheadTracer.enabled():
-            self.log("Enabling overhead tracing")
-            self.overhead_trace = OverheadTracer(working_dir)
-        else:
-            self.overhead_trace = None
+    def __setup_tracers(self, tracer_types):
+        tracers = [ t(self.working_dir) for t in tracer_types ]
+
+        self.regular_tracers  = [t for t in tracers if not t.is_exact()]
+        self.exact_tracers = [t for t in tracers if t.is_exact()]
+
+        for t in tracers:
+            self.log("Enabling %s" % t.get_name())
 
     def __make_dirs(self):
         interrupted = None
@@ -111,11 +101,10 @@ class Experiment(object):
                 raise Exception("Too much time has passed waiting for tasks!")
             time.sleep(1)
 
-        # Overhead tracer must be started right after release or overhead
+        # Exact tracers (like overheads) must be started right after release or
         # measurements will be full of irrelevant records
-        if self.overhead_trace:
-            self.log("Starting overhead trace")
-            self.overhead_trace.start_tracing()
+        self.log("Starting %d released tracers" % len(self.exact_tracers))
+        map(methodcaller('start_tracing'), self.exact_tracers)
 
         self.log("Releasing %d tasks" % len(self.executables))
         released = lu.release_tasks()
@@ -145,10 +134,9 @@ class Experiment(object):
             if not e.wait():
                 ret = False
 
-        # And it must be stopped here for the same reason
-        if self.overhead_trace:
-            self.log("Stopping overhead trace")
-            self.overhead_trace.stop_tracing()
+        # And these must be stopped here for the same reason
+        self.log("Stopping exact tracers")
+        map(methodcaller('stop_tracing'), self.exact_tracers)
 
         if not ret:
             raise ExperimentFailed(self.name)
@@ -186,8 +174,8 @@ class Experiment(object):
         self.log("Switching to %s" % self.scheduler)
         lu.switch_scheduler(self.scheduler)
 
-        self.log("Starting %d tracers" % len(self.tracers))
-        map(methodcaller('start_tracing'), self.tracers)
+        self.log("Starting %d regular tracers" % len(self.regular_tracers))
+        map(methodcaller('start_tracing'), self.regular_tracers)
 
         self.exec_out = open('%s/exec-out.txt' % self.working_dir, 'w')
         self.exec_err = open('%s/exec-err.txt' % self.working_dir, 'w')
@@ -200,6 +188,6 @@ class Experiment(object):
         self.exec_out and self.exec_out.close()
         self.exec_err and self.exec_err.close()
 
-        self.log("Stopping tracers")
-        map(methodcaller('stop_tracing'), self.tracers)
+        self.log("Stopping regular tracers")
+        map(methodcaller('stop_tracing'), self.regular_tracers)
 

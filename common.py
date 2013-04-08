@@ -7,7 +7,7 @@ import sys
 from collections import defaultdict
 from textwrap import dedent
 
-def get_executable(prog, hint, optional=False):
+def get_executable(prog, hint='unknown', optional=False):
     '''Search for @prog in system PATH. Print @hint if no binary is found.'''
 
     def is_exe(fpath):

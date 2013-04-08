@@ -7,6 +7,7 @@ import os
 import re
 import shutil
 import sys
+import run.tracer as trace
 import traceback
 
 from collections import namedtuple
@@ -15,6 +16,12 @@ from run.executable.executable import Executable
 from run.experiment import Experiment,ExperimentDone
 from run.proc_entry import ProcEntry
 
+'''Customizable experiment parameters'''
+ExpParams = namedtuple('ExpParams', ['scheduler', 'duration', 'tracers',
+                                     'kernel', 'config_options'])
+'''Comparison of requested versus actual kernel compile parameter value'''
+ConfigResult = namedtuple('ConfigResult', ['param', 'wanted', 'actual'])
+
 class InvalidKernel(Exception):
     def __init__(self, kernel):
         self.kernel = kernel
@@ -22,7 +29,7 @@ class InvalidKernel(Exception):
     def __str__(self):
         return "Kernel name does not match '%s'." % self.kernel
 
-ConfigResult = namedtuple('ConfigResult', ['param', 'wanted', 'actual'])
+
 class InvalidConfig(Exception):
     def __init__(self, results):
         self.results = results
@@ -37,6 +44,7 @@ class InvalidConfig(Exception):
 
         return "Invalid kernel configuration " +\
                "(ignore configuration with -i option).\n" + "\n".join(messages)
+
 
 def parse_args():
     parser = OptionParser("usage: %prog [options] [sched_file]... [exp_dir]...")
@@ -92,6 +100,7 @@ def convert_data(data):
 
     return {'proc' : procs, 'spin' : spins}
 
+
 def fix_paths(schedule, exp_dir, sched_file):
     '''Replace relative paths of command line arguments with absolute ones.'''
     for (idx, (spin, args)) in enumerate(schedule['spin']):
@@ -106,97 +115,24 @@ def fix_paths(schedule, exp_dir, sched_file):
 
         schedule['spin'][idx] = (spin, args)
 
-def verify_environment(kernel, copts):
-    if kernel and not com.uname_matches(kernel):
-        raise InvalidKernel(kernel)
 
-    if copts:
-        results = []
-        for param, wanted in copts.iteritems():
-            try:
-                actual = com.get_config_option(param)
-            except IOError:
-                actual = None
-            if not str(wanted) == str(actual):
-                results += [ConfigResult(param, wanted, actual)]
-
-        if results:
-            raise InvalidConfig(results)
-
-def load_experiment(sched_file, scheduler, duration,
-                    param_file, out_dir, ignore, jabber):
-    if not os.path.isfile(sched_file):
-        raise IOError("Cannot find schedule file: %s" % sched_file)
-
-    dir_name, fname = os.path.split(sched_file)
-    exp_name = os.path.split(dir_name)[1] + "/" + fname
-
-    params = {}
-    kernel = copts = ""
-
-    param_file = param_file or \
-      "%s/%s" % (dir_name, conf.DEFAULTS['params_file'])
-
-    if os.path.isfile(param_file):
-        params = com.load_params(param_file)
-        scheduler = scheduler or params[conf.PARAMS['sched']]
-        duration  = duration  or params[conf.PARAMS['dur']]
-
-        # Experiments can specify required kernel name
-        if conf.PARAMS['kernel'] in params:
-            kernel = params[conf.PARAMS['kernel']]
-        # Or required config options
-        if conf.PARAMS['copts'] in params:
-            copts = params[conf.PARAMS['copts']]
-
-    duration = duration or conf.DEFAULTS['duration']
-
-    if not scheduler:
-        raise IOError("Parameter scheduler not specified in %s" % (param_file))
-
-    # Parse schedule file's intentions
-    schedule = load_schedule(sched_file)
-    work_dir = "%s/tmp" % dir_name
-
-    fix_paths(schedule, os.path.split(sched_file)[0], sched_file)
-
-    if not ignore:
-        verify_environment(kernel, copts)
-
-    run_exp(exp_name, schedule, scheduler, kernel, duration, work_dir, out_dir)
-
-    if jabber:
-        jabber.send("Completed '%s'" % exp_name)
-
-    # Save parameters used to run experiment in out_dir
-    out_params = dict(params.items() +
-                      [(conf.PARAMS['sched'],  scheduler),
-                       (conf.PARAMS['tasks'],  len(schedule['spin'])),
-                       (conf.PARAMS['dur'],    duration)])
-
-    # Feather-trace clock frequency saved for accurate overhead parsing
-    ft_freq = com.ft_freq()
-    if ft_freq:
-        out_params[conf.PARAMS['cycles']] = ft_freq
-
-    with open("%s/%s" % (out_dir, conf.DEFAULTS['params_file']), 'w') as f:
-        f.write(str(out_params))
-
-def load_schedule(fname):
+def load_schedule(name, fname, duration):
+    '''Turn schedule file @fname into ProcEntry's and Executable's which execute
+    for @duration time.'''
     with open(fname, 'r') as f:
         data = f.read().strip()
     try:
         schedule = eval(data)
     except:
         schedule = convert_data(data)
-    return schedule
 
+    # Make paths relative to the file's directory
+    fix_paths(schedule, os.path.split(fname)[0], fname)
 
-def run_exp(name, schedule, scheduler, kernel, duration, work_dir, out_dir):
     proc_entries = []
     executables  = []
 
-    # Parse values for proc entries
+    # Create proc entries
     for entry_conf in schedule['proc']:
         path = entry_conf[0]
         data = entry_conf[1]
@@ -206,7 +142,7 @@ def run_exp(name, schedule, scheduler, kernel, duration, work_dir, out_dir):
 
         proc_entries += [ProcEntry(path, data)]
 
-    # Parse spinners
+    # Create executables
     for spin_conf in schedule['spin']:
         if isinstance(spin_conf, str):
             # Just a string defaults to default spin
@@ -216,9 +152,6 @@ def run_exp(name, schedule, scheduler, kernel, duration, work_dir, out_dir):
             if len(spin_conf) != 2:
                 raise IOError("Invalid spin conf %s: %s" % (spin_conf, name))
             (spin, args) = (spin_conf[0], spin_conf[1])
-
-        # if not conf.BINS[spin]:
-        #     raise IndexError("No knowledge of program %s: %s" % (spin, name))
 
         real_spin = com.get_executable(spin, "")
         real_args = args.split()
@@ -230,10 +163,142 @@ def run_exp(name, schedule, scheduler, kernel, duration, work_dir, out_dir):
 
         executables += [Executable(real_spin, real_args)]
 
-    exp = Experiment(name, scheduler, work_dir, out_dir,
-                     proc_entries, executables)
+    return proc_entries, executables
+
+
+def verify_environment(exp_params):
+    if exp_params.kernel and not com.uname_matches(exp_params.kernel):
+        raise InvalidKernel(exp_params.kernel)
+
+    if exp_params.config_options:
+        results = []
+        for param, wanted in exp_params.config_options.iteritems():
+            try:
+                actual = com.get_config_option(param)
+            except IOError:
+                actual = None
+            if not str(wanted) == str(actual):
+                results += [ConfigResult(param, wanted, actual)]
+
+        if results:
+            raise InvalidConfig(results)
+
+
+def run_parameter(exp_dir, out_dir, params, param_name):
+    '''Run an executable (arguments optional) specified as a configurable
+    @param_name in @params.'''
+    if conf.PARAMS[param_name] not in params:
+        return
+
+    script_params = params[conf.PARAMS[param_name]]
+
+    # Split into arguments and program name
+    if type(script_params) != type([]):
+        script_params = [script_params]
+    script_name = script_params.pop(0)
+
+    cwd_name = "%s/%s" % (exp_dir, script_name)
+    if os.path.isfile(cwd_name):
+        script = cwd_name
+    else:
+        script = com.get_executable(script_name, optional=True)
+
+    if not script:
+        raise Exception("Cannot find executable %s-script: %s" %
+                        (param_name, script_name))
+
+    out  = open('%s/%s-out.txt' % (out_dir, param_name), 'w')
+    prog = Executable(script, script_params,
+                      stderr_file=out, stdout_file=out)
+    prog.cwd = out_dir
+
+    prog.execute()
+    prog.wait()
+
+    out.close()
+
+
+def get_exp_params(cmd_scheduler, cmd_duration, file_params):
+    kernel = copts = ""
+
+    scheduler = cmd_scheduler or file_params[conf.PARAMS['sched']]
+    duration  = cmd_duration  or file_params[conf.PARAMS['dur']] or\
+                conf.DEFAULTS['duration']
+
+    # Experiments can specify required kernel name
+    if conf.PARAMS['kernel'] in file_params:
+        kernel = file_params[conf.PARAMS['kernel']]
+
+    # Or required config options
+    if conf.PARAMS['copts'] in file_params:
+        copts = file_params[conf.PARAMS['copts']]
+
+    # Or required tracers
+    requested = []
+    if conf.PARAMS['trace'] in file_params:
+        requested = file_params[conf.PARAMS['trace']]
+    tracers = trace.get_tracer_types(requested)
+
+    # But only these two are mandatory
+    if not scheduler:
+        raise IOError("No scheduler found in param file!")
+    if not duration:
+        raise IOError("No duration found in param file!")
+
+    return ExpParams(scheduler=scheduler, kernel=kernel, duration=duration,
+                     config_options=copts, tracers=tracers)
+
+
+def load_experiment(sched_file, cmd_scheduler, cmd_duration,
+                    param_file, out_dir, ignore, jabber):
+    '''Load and parse data from files and run result.'''
+    if not os.path.isfile(sched_file):
+        raise IOError("Cannot find schedule file: %s" % sched_file)
+
+    dir_name, fname = os.path.split(sched_file)
+    exp_name = os.path.split(dir_name)[1] + "/" + fname
+    work_dir = "%s/tmp" % dir_name
+
+    # Load parameter file
+    param_file = param_file or \
+      "%s/%s" % (dir_name, conf.DEFAULTS['params_file'])
+    if os.path.isfile(param_file):
+        file_params = com.load_params(param_file)
+    else:
+        file_params = {}
+
+    exp_params = get_exp_params(cmd_scheduler, cmd_duration, file_params)
+    procs, execs = load_schedule(exp_name, sched_file, exp_params.duration)
+
+    exp = Experiment(exp_name, exp_params.scheduler, work_dir, out_dir,
+                     procs, execs, exp_params.tracers)
+
+    if not ignore:
+        verify_environment(exp_params)
+
+    run_parameter(dir_name, work_dir, file_params, 'pre')
 
     exp.run_exp()
+
+    run_parameter(dir_name, out_dir, file_params, 'post')
+
+    if jabber:
+        jabber.send("Completed '%s'" % exp_name)
+
+    # Save parameters used to run experiment in out_dir
+    out_params = dict(file_params.items() +
+                      [(conf.PARAMS['sched'],  exp_params.scheduler),
+                       (conf.PARAMS['tasks'],  len(execs)),
+                       (conf.PARAMS['dur'],    exp_params.duration)])
+
+    # Feather-trace clock frequency saved for accurate overhead parsing
+    ft_freq = com.ft_freq()
+    if ft_freq:
+        out_params[conf.PARAMS['cycles']] = ft_freq
+
+    with open("%s/%s" % (out_dir, conf.DEFAULTS['params_file']), 'w') as f:
+        f.write(str(out_params))
+
 
 def setup_jabber(target):
     try:
@@ -241,9 +306,10 @@ def setup_jabber(target):
 
         return Jabber(target)
     except ImportError:
-        sys.stderr.write("Failed to import jabber. Is python-xmpppy "+\
-                         "installed?\nDisabling Jabber messaging.\n")
+        sys.stderr.write("Failed to import jabber, disabling messages. " +
+                         "Is python-xmpp installed?")
         return None
+
 
 def main():
     opts, args = parse_args()

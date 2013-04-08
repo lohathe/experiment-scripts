@@ -6,10 +6,17 @@ from operator import methodcaller
 from run.executable.ftcat import FTcat,Executable
 
 class Tracer(object):
-    def __init__(self, name, output_dir):
+    def __init__(self, name, output_dir, exact=False):
         self.name = name
         self.output_dir = output_dir
         self.bins = []
+        self.exact=exact
+
+    def get_name(self):
+        return self.name
+
+    def is_exact(self):
+        return self.exact
 
     def start_tracing(self):
         map(methodcaller("execute"), self.bins)
@@ -23,7 +30,7 @@ class LinuxTracer(Tracer):
     LITMUS_EVENTS = "%s/events/litmus" % EVENT_ROOT
 
     def __init__(self, output_dir):
-        super(LinuxTracer, self).__init__("trace-cmd", output_dir)
+        super(LinuxTracer, self).__init__("Trace-cmd / Kernelshark", output_dir)
 
         extra_args = ["record", # "-e", "sched:sched_switch",
                       "-e", "litmus:*",
@@ -89,7 +96,7 @@ class OverheadTracer(Tracer):
     DEVICE_STR = '/dev/litmus/ft_trace0'
 
     def __init__(self, output_dir):
-        super(OverheadTracer, self).__init__("Overhead Trace", output_dir)
+        super(OverheadTracer, self).__init__("Overhead Trace", output_dir, True)
 
         stdout_f = open('{0}/{1}'.format(self.output_dir, conf.FILES['ft_data']), 'w')
         stderr_f = open('{0}/{1}.stderr.txt'.format(self.output_dir, conf.FILES['ft_data']), 'w')
@@ -109,3 +116,42 @@ class PerfTracer(Tracer):
     @staticmethod
     def enabled():
         return False
+
+
+tracers = {}
+
+def register_tracer(tracer, name):
+    tracers[name] = tracer
+
+def get_tracer_types(names):
+    error = True # Error if name is not present
+    errors = []
+
+    if not names:
+        # Just return all enabled tracers if none specified
+        names = tracers.keys()
+        error = False
+
+    ret = []
+
+    for name in names:
+        if name not in tracers:
+            raise ValueError("Invalid tracer '%s', valid names are: %s" %
+                             (name, tracers.keys()))
+
+        if tracers[name].enabled():
+            ret += [ tracers[name] ]
+        elif error:
+            errors += ["Tracer '%s' requested, but not enabled." % name]
+
+    if errors:
+        raise ValueError("Check your kernel compile configuration!\n" +
+                         "\n".join(errors))
+
+    return ret
+
+register_tracer(LinuxTracer, "kernelshark")
+register_tracer(LogTracer, "log")
+register_tracer(SchedTracer, "sched")
+register_tracer(OverheadTracer, "overhead")
+

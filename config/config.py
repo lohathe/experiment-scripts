@@ -28,7 +28,10 @@ PARAMS = {'sched'   : 'scheduler',       # Scheduler used by run_exps
           'copts'   : 'config-options',  # Required kernel configuration options
           'cycles'  : 'clock-frequency', # Frequency run_exps was run with
           'tasks'   : 'tasks',           # Number of tasks
-          'trial'   : 'trial'            # For multiple exps with same config
+          'trial'   : 'trial',           # For multiple exps with same config
+          'pre'     : 'pre-experiment',  # Run before each experiment
+          'post'    : 'post-experiment', # Run after each experiment
+          'trace'   : 'tracers'          # Tracers to run with an experiment
           }
 
 '''Default values for program options.'''
