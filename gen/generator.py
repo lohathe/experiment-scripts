@@ -75,7 +75,7 @@ class Generator(object):
         release_master = list(set([False, config]))
 
 
-        return [GenOption('num_tasks', int, range(cpus, 5*cpus, cpus),
+        return [GenOption('tasks', int, range(cpus, 5*cpus, cpus),
                               'Number of tasks per experiment.'),
                 GenOption('cpus', int, [cpus],
                           'Number of processors on target system.'),
@@ -106,13 +106,13 @@ class Generator(object):
         tg = tasks.TaskGenerator(period=periods, util=utils)
         ts = []
         tries = 0
-        while len(ts) != params['num_tasks'] and tries < 100:
-            ts = tg.make_task_set(max_tasks = params['num_tasks'], max_util=max_util)
+        while len(ts) != params['tasks'] and tries < 100:
+            ts = tg.make_task_set(max_tasks = params['tasks'], max_util=max_util)
             tries += 1
-        if len(ts) != params['num_tasks']:
+        if len(ts) != params['tasks']:
             print(("Only created task set of size %d < %d for params %s. " +
                    "Switching to light utilization.") %
-                  (len(ts), params['num_tasks'], params))
+                  (len(ts), params['tasks'], params))
             print("Switching to light util. This usually means the " +
                   "utilization distribution is too agressive.")
             return self._create_taskset(params, periods, NAMED_UTILIZATIONS['uni-light'],
@@ -130,18 +130,18 @@ class Generator(object):
         '''Write out file with relevant parameters.'''
         # Don't include this in the parameters. It will be automatically added
         # in run_exps.py
-        if 'num_tasks' in params:
-            num_tasks = params.pop('num_tasks')
+        if 'tasks' in params:
+            tasks = params.pop('tasks')
         else:
-            num_tasks = 0
+            tasks = 0
 
         exp_params_file = self.out_dir + "/" + DEFAULTS['params_file']
         with open(exp_params_file, 'wa') as f:
             params['scheduler'] = self.name
             pprint.pprint(params, f)
 
-        if num_tasks:
-            params['num_tasks'] = num_tasks
+        if tasks:
+            params['tasks'] = tasks
 
     def __setup_params(self, params):
         '''Set default parameter values and check that values are valid.'''

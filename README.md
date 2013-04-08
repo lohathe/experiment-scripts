@@ -224,13 +224,13 @@ The `-d` option will describe the properties of a generator or generators and th
 ```bash
 $ gen_exps.py -d G-EDF,P-EDF
 Generator GSN-EDF:
-        num_tasks -- Number of tasks per experiment.
+        tasks -- Number of tasks per experiment.
                 Default: [24, 48, 72, 96]
                 Allowed: <type 'int'>
 	....
 
 Generator PSN-EDF:
-        num_tasks -- Number of tasks per experiment.
+        tasks -- Number of tasks per experiment.
                 Default: [24, 48, 72, 96]
                 Allowed: <type 'int'>
         cpus -- Number of processors on target system.
@@ -239,7 +239,7 @@ Generator PSN-EDF:
 	....
 ```
 
-You create experiments by specifying a generator. The following will create experiments 4 schedules with 24, 48, 72, and 96 tasks, because the default value of `num_tasks` is an array of these values (see above).
+You create experiments by specifying a generator. The following will create experiments 4 schedules with 24, 48, 72, and 96 tasks, because the default value of `tasks` is an array of these values (see above).
 
 ```bash
 $ gen_exps.py P-EDF
@@ -251,7 +251,7 @@ sched=GSN-EDF_num-tasks=72/  sched=GSN-EDF_num-tasks=96/
 You can modify the default using a single value (the `-f` option deletes previous experiments in the output directory, defaulting to `exps/`, changeable with `-o`):
 
 ```bash
-$ gen_exps.py -f P-EDF num_tasks=24
+$ gen_exps.py -f P-EDF tasks=24
 $ ls exps/
 sched=GSN-EDF_num-tasks=24/
 ```
@@ -259,7 +259,7 @@ sched=GSN-EDF_num-tasks=24/
 Or with an array of values, specified as a comma-seperated list:
 
 ```bash
-$ gen_exps.py -f num_tasks=`seq -s, 24 2 30` P-EDF
+$ gen_exps.py -f tasks=`seq -s, 24 2 30` P-EDF
 sched=PSN-EDF_num-tasks=24/  sched=PSN-EDF_num-tasks=26/
 sched=PSN-EDF_num-tasks=28/  sched=PSN-EDF_num-tasks=30/
 ```
@@ -267,7 +267,7 @@ sched=PSN-EDF_num-tasks=28/  sched=PSN-EDF_num-tasks=30/
 The generator will create a different directory for each possible configuration of the parameters. Each parameter which is varied is included in the name of the schedule directory. For example, to vary the number of CPUs but not the number of tasks:
 
 ```bash
-$ gen_exps.py -f num_tasks=24 cpus=3,6 P-EDF
+$ gen_exps.py -f tasks=24 cpus=3,6 P-EDF
 $ ls exps
 sched=PSN-EDF_cpus=3/  sched=PSN-EDF_cpus=6/
 ```
@@ -283,7 +283,7 @@ $ cat exps/sched\=PSN-EDF_cpus\=3/params.py
 You can also have multiple schedules generated with the same configuration using the `-n` option:
 
 ```bash
-$ gen_exps.py -f num_tasks=24 -n 5 P-EDF
+$ gen_exps.py -f tasks=24 -n 5 P-EDF
 $ ls exps/
 sched=PSN-EDF_trial=0/  sched=PSN-EDF_trial=1/  sched=PSN-EDF_trial=2/
 sched=PSN-EDF_trial=3/  sched=PSN-EDF_trial=4/
