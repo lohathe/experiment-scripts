@@ -72,11 +72,13 @@ OUT_DIR/[SCHED_(FILE|DIR)/]
 
 *Defaults*: `SCHED_FILE = sched.py`, `PARAM_FILE = params.py`, `DURATION = 30`, `OUT_DIR = run-data/`
 
-This script reads *schedule files* (described below) and executes real-time task systems, recording all overhead, logging, and trace data which is enabled in the system. For example, if trace logging is enabled, rt-kernelshark is found in the path, but feather-trace is disabled (the devices are not present), only trace logs and rt-kernelshark logs will be recorded.
+This script reads *schedule files* (described below) and executes real-time task systems, recording all overhead, logging, and trace data which is enabled in the system (unless a specific set of tracers is specified in the parameter file, see below). For example, if trace logging is enabled, rt-kernelshark is found in the path, but feather-trace is disabled (the devices are not present), only trace logs and rt-kernelshark logs will be recorded.
 
 When `run_exps.py` is running a schedule file, temporary data is saved in a `tmp` directory in the same directory as the schedule file. When execution completes, this data is moved into a directory under the `run_exps.py` output directory (default: `run-data/`, can be changed with the `-o` option). When multiple schedules are run, each schedule's data is saved in a unique directory under the output directory.
 
 If a schedule has been run and it's data is in the output directory, `run_exps.py` will not re-run the schedule unless the `-f` option is specified. This is useful if your system crashes midway through a set of experiments.
+
+You can use the `-j` option to send a jabber instant message every time an experiment completes. Running the script with `-j` will print out more details about this option.
 
 Schedule files have one of the following two formats:
 
@@ -115,13 +117,13 @@ $ run_exps.py -s GSN-EDF test.sched
 [Exp test/test.sched]: Enabling sched_trace
 ...
 [Exp test/test.sched]: Switching to GSN-EDF
-[Exp test/test.sched]: Starting 3 tracers
+[Exp test/test.sched]: Starting 3 regular tracers
 [Exp test/test.sched]: Starting the programs
 [Exp test/test.sched]: Sleeping until tasks are ready for release...
 [Exp test/test.sched]: Releasing 3 tasks
 [Exp test/test.sched]: Waiting for program to finish...
 [Exp test/test.sched]: Saving results in /root/schedules/test/run-data/test.sched
-[Exp test/test.sched]: Stopping tracers
+[Exp test/test.sched]: Stopping regular tracers
 [Exp test/test.sched]: Switching to Linux scheduler
 [Exp test/test.sched]: Experiment done!
 Experiments run:        1
@@ -167,10 +169,25 @@ You can include non-relevant parameters which `run_exps.py` does not understand 
 $ mkdir test1
 # The duration will default to 30 and need not be specified
 $ echo "{'scheduler':'C-EDF', 'test-param':1}" > test1/params.py
-$ echo "10 20" > test1/sched.py
+$ echo "-p 1 10 20" > test1/sched.py
 $ cp -r test1 test2
 $ echo "{'scheduler':'GSN-EDF', 'test-param':2}"> test2/params.py
 $ run_exps.py test*
+```
+
+You can specify commands to run before and after each experiment is run using 'pre-experiment' and 'post-experiment'. This is useful for complicated system setup such as managing shared resources. The following example prints out a message before and after an experiment is run (note that command line arguments can be specified using arrays):
+```bash
+$ echo "10 20" > sched.py
+$ echo "{'scheduler':'GSN-EDF',
+'pre-experiment' : 'script1.sh',
+'post-experiment' : ['echo', 'Experiment ends!']}" > params.py
+$ echo "#!/bin/bash
+Experiment begins!" > script1.sh
+$ run_exps.py
+$ cat pre-out.txt
+Experiment begins!
+$ cat post-out.txt
+Experiment ends!
 ```
 
 Finally, you can specify system properties in `params.py` which the environment must match for the experiment to run. These are useful if you have a large batch of experiments which must be run under different kernels or kernel configurations. The first property is a regular expression for the name of the kernel:
@@ -200,6 +217,10 @@ The second property is kernel configuration options. These assume the configurat
 }
 ```
 
+The third property is required tracers. The `tracers` property lets the user specify only those tracers they want to run with an experiment, as opposed to starting every available tracer (the default). If any of these specified tracers cannot be enabled, e.g. the kernel was not compiled with feather-trace support, the experiment will not run. The following example gives an experiment which will not run unless all four tracers are enabled:
+```python
+{'tracers':['kernelshark', 'log', 'sched', 'overhead']}
+```
 
 ## gen_exps.py
 *Usage*: `gen_exps.py [options] [files...] [generators...] [param=val[,val]...]`
