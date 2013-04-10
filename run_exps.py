@@ -68,6 +68,9 @@ def parse_args():
     parser.add_option('-j', '--jabber', metavar='username@domain',
                       dest='jabber', default=None,
                       help='send a jabber message when an experiment completes')
+    parser.add_option('-e', '--email', metavar='username@server',
+                      dest='email', default=None,
+                      help='send an email when all experiments complete')
 
     return parser.parse_args()
 
@@ -295,10 +298,22 @@ def setup_jabber(target):
 
         return Jabber(target)
     except ImportError:
-        sys.stderr.write("Failed to import jabber, disabling messages. " +
-                         "Is python-xmpp installed?")
+        sys.stderr.write("Failed to import jabber. Is python-xmpp installed? " +
+                         "Disabling instant messages.\n")
         return None
 
+def setup_email(target):
+    try:
+        from run.emailer import Emailer
+
+        return Emailer(target)
+    except ImportError:
+        message = "Failed to import email. Is smtplib installed?"
+    except IOError:
+        message = "Failed to create email. Is an smtp server active?"
+
+    sys.stderr.write(message + " Disabling email message.\n")
+    return None
 
 def main():
     opts, args = parse_args()
@@ -320,10 +335,8 @@ def main():
     failed = 0
     invalid = 0
 
-    if opts.jabber:
-        jabber = setup_jabber(opts.jabber)
-    else:
-        jabber = None
+    jabber = setup_jabber(opts.jabber) if opts.jabber else None
+    email  = setup_email(opts.email) if opts.email else None
 
     for exp in args:
         path = "%s/%s" % (os.getcwd(), exp)
@@ -357,12 +370,17 @@ def main():
     if not os.listdir(out_base) and created and not succ:
         os.rmdir(out_base)
 
-    print("Experiments run:\t%d" % len(args))
-    print("  Successful:\t\t%d" % succ)
-    print("  Failed:\t\t%d" % failed)
-    print("  Already Done:\t\t%d" % done)
-    print("  Invalid Environment:\t%d" % invalid)
+    message = "Experiments run:\t%d" % len(args) +\
+      "\n  Successful:\t\t%d" % succ +\
+      "\n  Failed:\t\t%d" % failed +\
+      "\n  Already Done:\t\t%d" % done +\
+      "\n  Invalid Environment:\t%d" % invalid
 
+    print(message)
+
+    if email:
+        email.send(message)
+        email.close()
 
 if __name__ == '__main__':
     main()

@@ -87,6 +87,10 @@ class Experiment(object):
     def __run_tasks(self):
         already_waiting = lu.waiting_tasks()
 
+        if already_waiting:
+            self.log("Already %d tasks waiting for release!")
+            self.log("Experiment will fail if any of these tasks are released.")
+
         self.log("Starting the programs")
         for e in self.executables:
             try:
@@ -115,7 +119,6 @@ class Experiment(object):
             # Need to re-release non-released tasks before we can kill them though
             self.log("Failed to release {} tasks! Re-releasing and killing".format(
                 len(self.executables) - released, len(self.executables)))
-
             time.sleep(5)
 
             released = lu.release_tasks()
@@ -160,7 +163,10 @@ class Experiment(object):
                 self.teardown()
         finally:
             self.log("Switching to Linux scheduler")
-            lu.switch_scheduler("Linux")
+            try:
+                lu.switch_scheduler("Linux")
+            except:
+                self.log("Failed to switch back to Linux.")
 
         if succ:
             self.__save_results()

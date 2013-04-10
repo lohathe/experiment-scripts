@@ -8,7 +8,6 @@ def switch_scheduler(switch_to_in):
 
     This methods sleeps for two seconds to give Linux the chance to execute
     schedule switching code. Raises an exception if the switch does not work.
-
     '''
 
     switch_to = str(switch_to_in).strip()
@@ -23,7 +22,7 @@ def switch_scheduler(switch_to_in):
         cur_plugin = active_plugin.read().strip()
 
     if switch_to != cur_plugin:
-        raise Exception("Could not switch to plugin: %s" % switch_to)
+        raise Exception("Could not switch to '%s' (check dmesg)"  % switch_to)
 
 def waiting_tasks():
     reg = re.compile(r'^ready.*?(?P<READY>\d+)$', re.M)
@@ -37,7 +36,6 @@ def waiting_tasks():
     return 0 if not ready else int(ready)
 
 def release_tasks():
-
     try:
         data = subprocess.check_output([conf.BINS['release']])
     except subprocess.CalledProcessError:
