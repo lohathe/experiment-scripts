@@ -7,29 +7,34 @@ import sys
 from collections import defaultdict
 from textwrap import dedent
 
-def get_executable(prog, hint='unknown', optional=False):
-    '''Search for @prog in system PATH. Print @hint if no binary is found.'''
+def get_executable(prog, cwd="."):
+    '''Search for @prog in system PATH and @cwd.'''
 
-    def is_exe(fpath):
-        return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
-
-    fpath, fname = os.path.split(prog)
-    if fpath:
-        if is_exe(prog):
-            return prog
+    cwd_path = "%s/%s" % (cwd, prog)
+    if is_executable(cwd_path):
+        return cwd_path
     else:
         for path in os.environ["PATH"].split(os.pathsep):
             exe_file = os.path.join(path, prog)
-            if is_exe(exe_file):
+            if is_executable(exe_file):
                 return exe_file
 
-    if not optional:
-        sys.stderr.write("Cannot find executable '%s' in PATH. This is a part "
-                         "of '%s' which should be added to PATH to run.\n" %
-                         (prog, hint))
-        sys.exit(1)
-    else:
-        return None
+    full_cwd = os.path.abspath(cwd)
+    raise IOError("Cannot find executable '%s'! (cwd='%s')" % (prog, full_cwd))
+
+def get_executable_hint(prog, hint, optional=False):
+    '''Search for @prog in system PATH. Print @hint if no binary is found.
+    Die if not @optional.'''
+    try:
+        prog = get_executable(prog)
+    except IOError:
+        if not optional:
+            sys.stderr.write(("Cannot find executable '%s' in PATH. This is " +\
+                              "a part of '%s' which should be added to PATH.\n")\
+                             % (prog, hint))
+            sys.exit(1)
+
+    return prog
 
 def get_config_option(option):
     '''Search for @option in installed kernel config (if present).
@@ -174,14 +179,12 @@ def ft_freq():
     return freq
 
 
-def uname_matches(reg):
-    data = subprocess.check_output(["uname", "-r"])
-    return bool( re.match(reg, data) )
+def kernel():
+    return subprocess.check_output(["uname", "-r"])
 
 def is_executable(fname):
     '''Return whether the file passed in is executable'''
-    mode = os.stat(fname)[stat.ST_MODE]
-    return mode & stat.S_IXUSR and mode & stat.S_IRUSR
+    return os.path.isfile(fname) and os.access(fname, os.X_OK)
 
 def is_device(dev):
     if not os.path.exists(dev):

@@ -79,13 +79,13 @@ def convert_data(data):
             r"(?P<HEADER>/proc/[\w\-]+?/)?"
             r"(?P<ENTRY>[\w\-\/]+)"
               r"\s*{\s*(?P<CONTENT>.*?)\s*?}$)|"
-        r"(?P<SPIN>^"
-            r"(?:(?P<TYPE>[^\d\-\s]\w*?) )?\s*"
+        r"(?P<TASK>^"
+            r"(?:(?P<PROG>[^\d\-\s][\w\.]*?) )?\s*"
             r"(?P<ARGS>[\w\-_\d\. \=]+)\s*$)",
         re.S|re.I|re.M)
 
     procs = []
-    spins = []
+    tasks = []
 
     for match in regex.finditer(data):
         if match.group("PROC"):
@@ -94,16 +94,16 @@ def convert_data(data):
             proc = (loc, match.group("CONTENT"))
             procs.append(proc)
         else:
-            prog = match.group("TYPE") or "rtspin"
+            prog = match.group("PROG") or conf.DEFAULTS['prog']
             spin = (prog, match.group("ARGS"))
-            spins.append(spin)
+            tasks.append(spin)
 
-    return {'proc' : procs, 'spin' : spins}
+    return {'proc' : procs, 'task' : tasks}
 
 
 def fix_paths(schedule, exp_dir, sched_file):
     '''Replace relative paths of command line arguments with absolute ones.'''
-    for (idx, (spin, args)) in enumerate(schedule['spin']):
+    for (idx, (task, args)) in enumerate(schedule['task']):
         for arg in re.split(" +", args):
             abspath = "%s/%s" % (exp_dir, arg)
             if os.path.exists(abspath):
@@ -113,7 +113,7 @@ def fix_paths(schedule, exp_dir, sched_file):
                 print("WARNING: non-existent file '%s' may be referenced:\n\t%s"
                       % (arg, sched_file))
 
-        schedule['spin'][idx] = (spin, args)
+        schedule['task'][idx] = (task, args)
 
 
 def load_schedule(name, fname, duration):
@@ -126,48 +126,43 @@ def load_schedule(name, fname, duration):
     except:
         schedule = convert_data(data)
 
+    sched_dir = os.path.split(fname)[0]
+
     # Make paths relative to the file's directory
-    fix_paths(schedule, os.path.split(fname)[0], fname)
+    fix_paths(schedule, sched_dir, fname)
 
     proc_entries = []
     executables  = []
 
     # Create proc entries
     for entry_conf in schedule['proc']:
-        path = entry_conf[0]
-        data = entry_conf[1]
-
-        if not os.path.exists(path):
-            raise IOError("Invalid proc path %s: %s" % (path, name))
-
-        proc_entries += [ProcEntry(path, data)]
+        proc_entries += [ProcEntry(*entry_conf)]
 
     # Create executables
-    for spin_conf in schedule['spin']:
-        if isinstance(spin_conf, str):
-            # Just a string defaults to default spin
-            (spin, args) = (conf.DEFAULTS['spin'], spin_conf)
-        else:
-            # Otherwise its a pair, the type and the args
-            if len(spin_conf) != 2:
-                raise IOError("Invalid spin conf %s: %s" % (spin_conf, name))
-            (spin, args) = (spin_conf[0], spin_conf[1])
+    for task_conf in schedule['task']:
+        if len(task_conf) != 2:
+            raise Exception("Invalid task conf %s: %s" % (task_conf, name))
 
-        real_spin = com.get_executable(spin, "")
-        real_args = args.split()
-        if re.match(".*spin", real_spin):
-            real_args = ['-w'] + real_args + [duration]
+        (task, args) = (task_conf[0], task_conf[1])
 
-        if not com.is_executable(real_spin):
-            raise OSError("Cannot run spin %s: %s" % (real_spin, name))
+        real_task = com.get_executable(task, sched_dir)
 
-        executables += [Executable(real_spin, real_args)]
+        # Last argument must always be duration
+        real_args = args.split() + [duration]
+
+        # All spins take a -w flag
+        if re.match(".*spin$", real_task) and '-w' not in real_args:
+            real_args = ['-w'] + real_args
+
+        executables += [Executable(real_task, real_args)]
 
     return proc_entries, executables
 
 
 def verify_environment(exp_params):
-    if exp_params.kernel and not com.uname_matches(exp_params.kernel):
+    '''Raise an exception if the current system doesn't match that required
+    by @exp_params.'''
+    if exp_params.kernel and not re.match(exp_params.kernel, com.kernel()):
         raise InvalidKernel(exp_params.kernel)
 
     if exp_params.config_options:
@@ -197,15 +192,7 @@ def run_parameter(exp_dir, out_dir, params, param_name):
         script_params = [script_params]
     script_name = script_params.pop(0)
 
-    cwd_name = "%s/%s" % (exp_dir, script_name)
-    if os.path.isfile(cwd_name):
-        script = cwd_name
-    else:
-        script = com.get_executable(script_name, optional=True)
-
-    if not script:
-        raise Exception("Cannot find executable %s-script: %s" %
-                        (param_name, script_name))
+    script = com.get_executable(script_name, cwd=exp_dir)
 
     out  = open('%s/%s-out.txt' % (out_dir, param_name), 'w')
     prog = Executable(script, script_params,
@@ -219,6 +206,7 @@ def run_parameter(exp_dir, out_dir, params, param_name):
 
 
 def get_exp_params(cmd_scheduler, cmd_duration, file_params):
+    '''Return ExpParam with configured values of all hardcoded params.'''
     kernel = copts = ""
 
     scheduler = cmd_scheduler or file_params[conf.PARAMS['sched']]
@@ -267,6 +255,7 @@ def load_experiment(sched_file, cmd_scheduler, cmd_duration,
     else:
         file_params = {}
 
+    # Create input needed by Experiment
     exp_params = get_exp_params(cmd_scheduler, cmd_duration, file_params)
     procs, execs = load_schedule(exp_name, sched_file, exp_params.duration)
 

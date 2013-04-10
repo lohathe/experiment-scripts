@@ -99,7 +99,7 @@ Schedule files have one of the following two formats:
             ...,
            ('path/to/proc','proc_value')
         ],
-        'spin':[
+        'task':[
            ('real_time_task', 'task_arguments'),
             ...
            ('real_time_task', 'task_arguments')
