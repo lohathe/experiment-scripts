@@ -22,10 +22,12 @@ They are designed with the following principles in mind:
 These scripts were tested using Python 2.7.2. They have not been tested using Python 3. The [Matplotlib][matplotlib] Python library is needed for plotting.
 
 The `run_exps.py` script should almost always be run using a LITMUS^RT kernel. In addition to the kernel, the following LITMUS-related repos must be in the user's `PATH`:
+
 1. [liblitmus][liblitmus]: for real-time executable simulation and task set release
 2. [feather-trace-tools][feather-trace-tools]: for recording and parsing overheads and scheduling events
 
 Additional features will be enabled if these repos are present in the `PATH`:
+
 1. [rt-kernelshark][rt-kernelshark]: to record ftrace events for kernelshark visualization
 2. sched_trace ([UNC internal][rtunc]) to output a file containing scheduling events as strings
 
