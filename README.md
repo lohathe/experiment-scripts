@@ -329,7 +329,7 @@ The goal is to create csv files which record how varying `PARAM` changes the val
 
 This script reads a directory or directories, parses the binary files inside for feather-trace or sched-trace data, then summarizes and organizes the results for output. The output can be to the console, to a python map, or to a directory tree of csvs (default). The python map (using `-m`) can be used for schedulability tests. The directory tree can be used to look at how changing parameters affects certain measurements.
 
-The script will use half the current computers CPUs to process data.
+The script will use all of the system CPUs to process data (changeable with `-p`).
 
 In the following example, too little data was found to create csv files, so the data is output to the console despite the user not specifying the `-v` option. This use is the easiest for quick overhead evalutation and debugging. Note that for overhead measurements like these, `parse_exps.py` will use the `clock-frequency` parameter saved in a params.py file by `run_exps.py` to calculate overhead measurements. If a param file is not present, as in this case, the current CPUs frequency will be used.
 
@@ -408,7 +408,7 @@ where a single plot exists for each directory of csvs, with a line for for each 
 
 *Defaults*: `OUT_DIR = plot-data/`, `CSV_DIR = .`
 
-This script takes directories of csvs (or directories formatted as specified below) and creates a pdf plot of each csv directory found. A line is created for each .csv file contained in a plot. [Matplotlib][matplotlib] is used to do the plotting. The script will use half the current computers CPUs to process data.
+This script takes directories of csvs (or directories formatted as specified below) and creates a pdf plot of each csv directory found. A line is created for each .csv file contained in a plot. [Matplotlib][matplotlib] is used to do the plotting. The script will use all of the system CPUs to process data (changeable with `-p`).
 
 If the csv filenames are formatted like: `param=value_param2=value2.csv`, the variation of these parameters will be used to color the lines in the most readable way. For instance, if there are three parameters, variations in one parameter will change line color, another line style (dashes/dots/etc), and a third line markers (trianges/circles/etc).
 
