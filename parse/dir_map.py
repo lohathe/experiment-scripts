@@ -96,7 +96,10 @@ class DirMap(object):
                     return
 
                 with open(path, 'rb') as f:
-                    data = np.loadtxt(f, delimiter=",")
+                    try:
+                        data = np.loadtxt(f, delimiter=",")
+                    except Exception as e:
+                        raise IOError("Cannot load '%s': %s" % (path, e.message))
 
                 # Convert to tuples of ints if possible, else floats
                 values = [map(lambda a:a if a%1 else int(a), t) for t in data]

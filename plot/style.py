@@ -7,13 +7,25 @@ class Style(namedtuple('SS', ['marker', 'line', 'color'])):
 
 class StyleMap(object):
     '''Maps configs (dicts) to specific line styles.'''
-    DEFAULT = Style('', '-', 'k')
+    DEFAULT = Style(marker='', line= '-', color='k')
+    ORDER = [ str, bool, float, int ]
 
     def __init__(self, col_list, col_values):
         '''Assign (some) columns in @col_list to fields in @Style to vary, and
         assign values for these columns to specific field values.'''
         self.value_map = {}
         self.field_map = {}
+
+        # Prioritize non-numbers
+        def type_priority(column):
+            value = col_values[column].pop()
+            col_values[column].add(value)
+            try:
+                t = float if float(value) % 1.0 else int
+            except:
+                t = bool if value in ['True','False'] else str
+            return StyleMap.ORDER.index(t)
+        col_list = sorted(col_list, key=type_priority)
 
         # TODO: undo this, switch to popping mechanism
         for field, values in reversed([x for x in self.__get_all()._asdict().iteritems()]):
@@ -31,9 +43,9 @@ class StyleMap(object):
 
     def __get_all(self):
         '''A Style holding all possible values for each property.'''
-        return Style(list('.,ov^<>1234sp*hH+xDd|_'), # markers
-                     ['-', ':', '--'], # lines
-                     list('bgrcmyk'))  # colors
+        return Style(marker=list('.,ov^<>1234sp*hH+xDd|_'),
+                     line=['-', ':', '--'],
+                     color=list('bgrcmyk'))
 
     def get_style(self, kv):
         '''Translate column values to unique line style.'''

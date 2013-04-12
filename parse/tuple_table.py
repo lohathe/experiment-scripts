@@ -78,7 +78,7 @@ class ReducedTupleTable(TupleTable):
                 val = kv[col]
 
                 try:
-                    float(val)
+                    float(str(val))
                 except:
                     # Only vary numbers. Otherwise, just have seperate files
                     continue
@@ -92,9 +92,6 @@ class ReducedTupleTable(TupleTable):
     def from_dir_map(dir_map):
         Leaf = namedtuple('Leaf', ['stat', 'variable', 'base',
                                    'summary', 'config', 'values'])
-
-        def next_type(path):
-            return path.pop() if path[-1] in Type else Type.Avg
 
         def leafs():
             for path, node in dir_map.leafs():

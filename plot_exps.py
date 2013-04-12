@@ -7,11 +7,11 @@ import shutil as sh
 import sys
 import traceback
 from collections import namedtuple
+from multiprocessing import Pool, cpu_count
 from optparse import OptionParser
 from parse.col_map import ColMap,ColMapBuilder
 from parse.dir_map import DirMap
 from plot.style import StyleMap
-from multiprocessing import Pool, cpu_count
 
 def parse_args():
     parser = OptionParser("usage: %prog [options] [csv_dir]...")
@@ -20,6 +20,9 @@ def parse_args():
                       help='directory for plot output', default='plot-data')
     parser.add_option('-f', '--force', action='store_true', default=False,
                       dest='force', help='overwrite existing data')
+    parser.add_option('-p', '--processors', default=max(cpu_count() - 1, 1),
+                      type='int', dest='processors',
+                      help='number of threads for processing')
 
     return parser.parse_args()
 
@@ -97,7 +100,7 @@ def plot_wrapper(details):
     except:
         traceback.print_exc()
 
-def plot_dir(data_dir, out_dir, force):
+def plot_dir(data_dir, out_dir, max_procs, force):
     sys.stderr.write("Reading data...\n")
     dir_map = DirMap.read(data_dir)
 
@@ -119,7 +122,7 @@ def plot_dir(data_dir, out_dir, force):
     if not plot_details:
         return
 
-    procs = min(len(plot_details), max(cpu_count()/2, 1))
+    procs = min(len(plot_details), max_procs)
     pool  = Pool(processes=procs)
     enum  = pool.imap_unordered(plot_wrapper, plot_details)
 
@@ -150,7 +153,7 @@ def main():
             out_dir = "%s/%s" % (opts.out_dir, os.path.split(dir)[1])
         else:
             out_dir = opts.out_dir
-        plot_dir(dir, out_dir, opts.force)
+        plot_dir(dir, out_dir, opts.processors, opts.force)
 
 if __name__ == '__main__':
     main()

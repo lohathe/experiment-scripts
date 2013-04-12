@@ -68,7 +68,7 @@ def make_iterator(fname):
     '''Iterate over (parsed record, processing method) in a
     sched-trace file.'''
     if not os.path.getsize(fname):
-        sys.stderr.write("Empty sched_trace file %s!" % fname)
+        # Likely a release master CPU
         return
 
     f = open(fname, 'rb')
@@ -176,6 +176,10 @@ def extract_sched_data(result, data_dir, work_dir):
 
     # Group per-task values
     for tdata in task_dict.itervalues():
+        if not tdata.params:
+            # Currently unknown where these invalid tasks come from...
+            continue
+
         miss_ratio = float(tdata.misses.num) / tdata.jobs
         # Scale average down to account for jobs with 0 tardiness
         avg_tard = tdata.misses.avg * miss_ratio

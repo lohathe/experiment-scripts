@@ -32,6 +32,9 @@ def parse_args():
     parser.add_option('-m', '--write-map', action='store_true', default=False,
                       dest='write_map',
                       help='Output map of values instead of csv tree')
+    parser.add_option('-p', '--processors', default=max(cpu_count() - 1, 1),
+                      type='int', dest='processors',
+                      help='number of threads for processing')
 
     return parser.parse_args()
 
@@ -134,7 +137,7 @@ def main():
 
     sys.stderr.write("Parsing data...\n")
 
-    procs = min(len(exps), max(cpu_count()/2, 1))
+    procs = min(len(exps), opts.processors)
     pool = Pool(processes=procs)
     pool_args = zip(exps, [opts.force]*len(exps))
     enum = pool.imap_unordered(parse_exp, pool_args, 1)
@@ -161,8 +164,8 @@ def main():
 
     reduced_table = result_table.reduce()
 
-    sys.stderr.write("Writing result...\n")
     if opts.write_map:
+        sys.stderr.write("Writing python map into %s...\n" % opts.out)
         # Write summarized results into map
         reduced_table.write_map(opts.out)
     else:
@@ -177,6 +180,7 @@ def main():
                     for e in exp:
                         print(e)
         else:
+            sys.stderr.write("Writing csvs into %s...\n" % opts.out)
             dir_map.write(opts.out)
 
 if __name__ == '__main__':

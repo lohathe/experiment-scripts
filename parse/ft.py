@@ -71,7 +71,6 @@ def extract_ft_data(result, data_dir, work_dir, cycles):
 
     bin_file = "{}/{}".format(data_dir, bins[0])
     if not os.path.getsize(bin_file):
-        sys.stderr.write("Empty feather trace file %s!" % bin_file)
         return False
 
     with open("%s/%s" % (work_dir, FT_ERR_NAME), 'w') as err_file:
