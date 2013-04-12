@@ -161,6 +161,7 @@ def extract_sched_data(result, data_dir, work_dir):
         cmd_arr = [conf.BINS['st_show']]
         cmd_arr.extend(bins)
         with open(output_file, "w") as f:
+            print("calling %s" % cmd_arr)
             subprocess.call(cmd_arr, cwd=data_dir, stdout=f)
 
     task_dict = defaultdict(lambda :

@@ -3,6 +3,11 @@ import time
 import subprocess
 import config.config as conf
 
+def scheduler():
+    with open('/proc/litmus/active_plugin', 'r') as active_plugin:
+        cur_plugin = active_plugin.read().strip()
+    return cur_plugin
+
 def switch_scheduler(switch_to_in):
     '''Switch the scheduler to whatever is passed in.
 
@@ -18,11 +23,10 @@ def switch_scheduler(switch_to_in):
     # it takes a bit to do the switch, sleep an arbitrary amount of time
     time.sleep(2)
 
-    with open('/proc/litmus/active_plugin', 'r') as active_plugin:
-        cur_plugin = active_plugin.read().strip()
-
+    cur_plugin = scheduler()
     if switch_to != cur_plugin:
-        raise Exception("Could not switch to '%s' (check dmesg)"  % switch_to)
+        raise Exception("Could not switch to '%s' (check dmesg), current: %s" %\
+                        (switch_to, cur_plugin))
 
 def waiting_tasks():
     reg = re.compile(r'^ready.*?(?P<READY>\d+)$', re.M)
@@ -32,6 +36,17 @@ def waiting_tasks():
     # Ignore if no tasks are waiting for release
     match = re.search(reg, data)
     ready = match.group("READY")
+
+    return 0 if not ready else int(ready)
+
+def all_tasks():
+    reg = re.compile(r'^real-time.*?(?P<TASKS>\d+)$', re.M)
+    with open('/proc/litmus/stats', 'r') as f:
+        data = f.read()
+
+    # Ignore if no tasks are waiting for release
+    match = re.search(reg, data)
+    ready = match.group("TASKS")
 
     return 0 if not ready else int(ready)
 

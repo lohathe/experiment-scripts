@@ -8,12 +8,11 @@ import re
 import shutil
 import sys
 import run.tracer as trace
-import traceback
 
 from collections import namedtuple
 from optparse import OptionParser
 from run.executable.executable import Executable
-from run.experiment import Experiment,ExperimentDone
+from run.experiment import Experiment,ExperimentDone,ExperimentFailed,SystemCorrupted
 from run.proc_entry import ProcEntry
 
 '''Customizable experiment parameters'''
@@ -330,6 +329,7 @@ def main():
         created = True
         os.mkdir(out_base)
 
+    ran  = 0
     done = 0
     succ = 0
     failed = 0
@@ -362,15 +362,23 @@ def main():
             invalid += 1
             print("Invalid environment for experiment '%s'" % exp)
             print(e)
-        except:
+        except KeyboardInterrupt:
+            print("Keyboard interrupt, quitting")
+            break
+        except SystemCorrupted as e:
+            print("System is corrupted! Fix state before continuing.")
+            print(e)
+            break
+        except ExperimentFailed:
             print("Failed experiment %s" % exp)
-            traceback.print_exc()
             failed += 1
+
+        ran += 1
 
     if not os.listdir(out_base) and created and not succ:
         os.rmdir(out_base)
 
-    message = "Experiments run:\t%d" % len(args) +\
+    message = "Experiments ran:\t%d of %d" % (ran, len(args)) +\
       "\n  Successful:\t\t%d" % succ +\
       "\n  Failed:\t\t%d" % failed +\
       "\n  Already Done:\t\t%d" % done +\

@@ -1,13 +1,13 @@
 import sys
 import subprocess
 import signal
-from common import is_executable
+from common import get_executable
 
 class Executable(object):
     '''Parent object that represents an executable for use in task-sets.'''
 
     def __init__(self, exec_file, extra_args=None, stdout_file = None, stderr_file = None):
-        self.exec_file = exec_file
+        self.exec_file = get_executable(exec_file)
         self.cwd = None
         self.stdout_file = stdout_file
         self.stderr_file = stderr_file
@@ -18,7 +18,7 @@ class Executable(object):
         else:
             self.extra_args = [str(a) for a in list(extra_args)] # make a duplicate
 
-        if not is_executable(self.exec_file):
+        if not self.exec_file:
             raise Exception("Not executable ? : %s" % self.exec_file)
 
     def __del__(self):

@@ -26,15 +26,17 @@ def get_executable_hint(prog, hint, optional=False):
     '''Search for @prog in system PATH. Print @hint if no binary is found.
     Die if not @optional.'''
     try:
-        prog = get_executable(prog)
+        full_path = get_executable(prog)
     except IOError:
         if not optional:
             sys.stderr.write(("Cannot find executable '%s' in PATH. This is " +\
                               "a part of '%s' which should be added to PATH.\n")\
                              % (prog, hint))
             sys.exit(1)
+        else:
+            full_path = None
 
-    return prog
+    return full_path
 
 def get_config_option(option):
     '''Search for @option in installed kernel config (if present).
