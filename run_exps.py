@@ -197,9 +197,8 @@ def run_parameter(exp_dir, out_dir, params, param_name):
     script = com.get_executable(script_name, cwd=exp_dir)
 
     out  = open('%s/%s-out.txt' % (out_dir, param_name), 'w')
-    prog = Executable(script, script_params,
+    prog = Executable(script, script_params, cwd=out_dir,
                       stderr_file=out, stdout_file=out)
-    prog.cwd = out_dir
 
     prog.execute()
     prog.wait()

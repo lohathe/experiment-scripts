@@ -2,7 +2,6 @@ import config.config as conf
 import os
 import re
 import struct
-import sys
 import subprocess
 
 from collections import defaultdict,namedtuple
@@ -27,10 +26,13 @@ class TimeTracker:
             self.begin = 0
             self.job   = 0
 
-    def start_time(self, record):
+    def start_time(self, record, time = None):
         '''Start duration of time.'''
-        self.begin = record.when
-        self.job   = record.job
+        if not time:
+            self.begin = record.when
+        else:
+            self.begin = time
+        self.job = record.job
 
 # Data stored for each task
 TaskParams = namedtuple('TaskParams',  ['wcet', 'period', 'cpu'])
@@ -92,7 +94,12 @@ def make_iterator(fname):
             continue
 
         obj = rdata.clazz(*values)
-        yield (obj, rdata.method)
+
+        if obj.job != 1:
+            yield (obj, rdata.method)
+        else:
+            # Results from the first job are nonsense
+            pass
 
 def read_data(task_dict, fnames):
     '''Read records from @fnames and store per-pid stats in @task_dict.'''
@@ -128,7 +135,8 @@ def process_completion(task_dict, record):
 def process_release(task_dict, record):
     data = task_dict[record.pid]
     data.jobs += 1
-    data.misses.start_time(record)
+    if data.params:
+        data.misses.start_time(record, record.when + data.params.period)
 
 def process_param(task_dict, record):
     params = TaskParams(record.wcet, record.period, record.partition)
@@ -143,36 +151,39 @@ def process_resume(task_dict, record):
 register_record('ResumeRecord', 9, process_resume, 'Q8x', ['when'])
 register_record('BlockRecord', 8, process_block, 'Q8x', ['when'])
 register_record('CompletionRecord', 7, process_completion, 'Q8x', ['when'])
-register_record('ReleaseRecord', 3, process_release, 'QQ', ['release', 'when'])
+register_record('ReleaseRecord', 3, process_release, 'QQ', ['when', 'release'])
 register_record('ParamRecord', 2, process_param, 'IIIcc2x',
                           ['wcet','period','phase','partition', 'task_class'])
 
-def extract_sched_data(result, data_dir, work_dir):
+def create_task_dict(data_dir, work_dir = None):
+    '''Parse sched trace files'''
     bin_files   = conf.FILES['sched_data'].format(".*")
     output_file = "%s/out-st" % work_dir
 
-    bins = ["%s/%s" % (data_dir,f) for f in os.listdir(data_dir) if re.match(bin_files, f)]
-    if not len(bins):
-        return
+    task_dict = defaultdict(lambda :
+                            TaskData(None, 1, TimeTracker(), TimeTracker()))
+
+    bin_names = [f for f in os.listdir(data_dir) if re.match(bin_files, f)]
+    if not len(bin_names):
+        return task_dict
 
     # Save an in-english version of the data for debugging
     # This is optional and will only be done if 'st_show' is in PATH
     if conf.BINS['st_show']:
         cmd_arr = [conf.BINS['st_show']]
-        cmd_arr.extend(bins)
+        cmd_arr.extend(bin_names)
         with open(output_file, "w") as f:
-            print("calling %s" % cmd_arr)
             subprocess.call(cmd_arr, cwd=data_dir, stdout=f)
 
-    task_dict = defaultdict(lambda :
-                            TaskData(0, 0, TimeTracker(), TimeTracker()))
-
     # Gather per-task values
-    read_data(task_dict, bins)
+    bin_paths = ["%s/%s" % (data_dir,f) for f in bin_names]
+    read_data(task_dict, bin_paths)
 
-    stat_data = {"avg-tard"   : [], "max-tard"  : [],
-                 "avg-block"  : [], "max-block" : [],
-                 "miss-ratio" : []}
+    return task_dict
+
+def extract_sched_data(result, data_dir, work_dir):
+    task_dict = create_task_dict(data_dir, work_dir)
+    stat_data = defaultdict(list)
 
     # Group per-task values
     for tdata in task_dict.itervalues():
@@ -181,18 +192,18 @@ def extract_sched_data(result, data_dir, work_dir):
             continue
 
         miss_ratio = float(tdata.misses.num) / tdata.jobs
+        stat_data["miss-ratio"].append(float(tdata.misses.num) / tdata.jobs)
+
+        stat_data["max-tard"  ].append(tdata.misses.max / tdata.params.wcet)
         # Scale average down to account for jobs with 0 tardiness
         avg_tard = tdata.misses.avg * miss_ratio
-
-        stat_data["miss-ratio"].append(miss_ratio)
         stat_data["avg-tard"  ].append(avg_tard / tdata.params.wcet)
-        stat_data["max-tard"  ].append(tdata.misses.max / tdata.params.wcet)
+
         stat_data["avg-block" ].append(tdata.blocks.avg / NSEC_PER_MSEC)
         stat_data["max-block" ].append(tdata.blocks.max / NSEC_PER_MSEC)
 
     # Summarize value groups
     for name, data in stat_data.iteritems():
-        if not data:
+        if not data or not sum(data):
             continue
         result[name] = Measurement(str(name)).from_array(data)
-
