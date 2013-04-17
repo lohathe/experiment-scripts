@@ -26,10 +26,13 @@ class TimeTracker:
             self.begin = 0
             self.job   = 0
 
-    def start_time(self, record):
+    def start_time(self, record, time = None):
         '''Start duration of time.'''
-        self.begin = record.when
-        self.job   = record.job
+        if not time:
+            self.begin = record.when
+        else:
+            self.begin = time
+        self.job = record.job
 
 # Data stored for each task
 TaskParams = namedtuple('TaskParams',  ['wcet', 'period', 'cpu'])
@@ -132,7 +135,8 @@ def process_completion(task_dict, record):
 def process_release(task_dict, record):
     data = task_dict[record.pid]
     data.jobs += 1
-    data.misses.start_time(record)
+    if data.params:
+        data.misses.start_time(record, record.when + data.params.period)
 
 def process_param(task_dict, record):
     params = TaskParams(record.wcet, record.period, record.partition)
@@ -147,7 +151,7 @@ def process_resume(task_dict, record):
 register_record('ResumeRecord', 9, process_resume, 'Q8x', ['when'])
 register_record('BlockRecord', 8, process_block, 'Q8x', ['when'])
 register_record('CompletionRecord', 7, process_completion, 'Q8x', ['when'])
-register_record('ReleaseRecord', 3, process_release, 'QQ', ['release', 'when'])
+register_record('ReleaseRecord', 3, process_release, 'QQ', ['when', 'release'])
 register_record('ParamRecord', 2, process_param, 'IIIcc2x',
                           ['wcet','period','phase','partition', 'task_class'])
 
@@ -203,4 +207,3 @@ def extract_sched_data(result, data_dir, work_dir):
         if not data or not sum(data):
             continue
         result[name] = Measurement(str(name)).from_array(data)
-
