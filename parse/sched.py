@@ -7,6 +7,7 @@ import subprocess
 from collections import defaultdict,namedtuple
 from common import recordtype
 from point import Measurement
+from ctypes import *
 
 class TimeTracker:
     '''Store stats for durations of time demarcated by sched_trace records.'''
@@ -38,33 +39,30 @@ class TimeTracker:
 TaskParams = namedtuple('TaskParams',  ['wcet', 'period', 'cpu'])
 TaskData   = recordtype('TaskData',    ['params', 'jobs', 'blocks', 'misses'])
 
-# Map of event ids to corresponding class, binary format, and processing methods
-RecordInfo = namedtuple('RecordInfo', ['clazz', 'fmt', 'method'])
-record_map = [0]*10
+# Map of event ids to corresponding class and format
+record_map = {}
 
-# Common to all records
-HEADER_FORMAT = '<bbhi'
-HEADER_FIELDS = ['type', 'cpu', 'pid', 'job']
 RECORD_SIZE   = 24
-
 NSEC_PER_MSEC = 1000000
 
-def register_record(name, id, method, fmt, fields):
-    '''Create record description from @fmt and @fields and map to @id, using
-    @method to process parsed record.'''
-    # Format of binary data (see python struct documentation)
-    rec_fmt = HEADER_FORMAT + fmt
+def register_record(id, clazz):
+    fields = clazz.FIELDS
 
-    # Corresponding field data
-    rec_fields = HEADER_FIELDS + fields
-    if "when" not in rec_fields: # Force a "when" field for everything
-        rec_fields += ["when"]
+    fsize = lambda fields : sum([sizeof(list(f)[1]) for f in fields])
+    diff  = RECORD_SIZE - fsize(SchedRecord.FIELDS) - fsize(fields)
 
-    # Create mutable class with the given fields
-    field_class = recordtype(name, list(rec_fields))
-    clazz = type(name, (field_class, object), {})
+    # Create extra padding fields to make record the proper size
+    # Creating one big field of c_uint64 and giving it a size of 8*diff
+    # _shoud_ work, but doesn't. This is an uglier way of accomplishing
+    # the same goal
+    for d in range(diff):
+        fields += [("extra%d" % d, c_char)]
 
-    record_map[id] = RecordInfo(clazz, rec_fmt, method)
+    # Create structure with fields and methods of clazz
+    clazz2 = type("Dummy%d" % id, (LittleEndianStructure,clazz),
+                  {'_fields_': SchedRecord.FIELDS + fields,
+                   '_pack_'  : 1})
+    record_map[id] = clazz2
 
 def make_iterator(fname):
     '''Iterate over (parsed record, processing method) in a
@@ -74,7 +72,6 @@ def make_iterator(fname):
         return
 
     f = open(fname, 'rb')
-    max_type = len(record_map)
 
     while True:
         data = f.read(RECORD_SIZE)
@@ -84,19 +81,15 @@ def make_iterator(fname):
         except struct.error:
             break
 
-        rdata = record_map[type_num] if type_num <= max_type else 0
-        if not rdata:
+        if type_num not in record_map:
             continue
 
-        try:
-            values = struct.unpack_from(rdata.fmt, data)
-        except struct.error:
-            continue
-
-        obj = rdata.clazz(*values)
+        clazz = record_map[type_num]
+        obj = clazz()
+        obj.fill(data)
 
         if obj.job != 1:
-            yield (obj, rdata.method)
+            yield obj
         else:
             # Results from the first job are nonsense
             pass
@@ -105,55 +98,84 @@ def read_data(task_dict, fnames):
     '''Read records from @fnames and store per-pid stats in @task_dict.'''
     buff = []
 
+    def get_time(record):
+        return record.when if hasattr(record, 'when') else 0
+
     def add_record(itera):
         # Ordered insertion into buff
         try:
-            next_ret = itera.next()
+            arecord = itera.next()
         except StopIteration:
             return
 
-        arecord, method = next_ret
         i = 0
-        for (i, (brecord, m, t)) in enumerate(buff):
-            if brecord.when > arecord.when:
+        for (i, (brecord, _)) in enumerate(buff):
+            if get_time(brecord) > get_time(arecord):
                 break
-        buff.insert(i, (arecord, method, itera))
+        buff.insert(i, (arecord, itera))
 
     for fname in fnames:
         itera = make_iterator(fname)
         add_record(itera)
 
     while buff:
-        (record, method, itera) = buff.pop(0)
+        record, itera = buff.pop(0)
 
         add_record(itera)
-        method(task_dict, record)
+        record.process(task_dict)
 
-def process_completion(task_dict, record):
-    task_dict[record.pid].misses.store_time(record)
+class SchedRecord(object):
+    # Subclasses will have their FIELDs merged into this one
+    FIELDS = [('type', c_uint8),  ('cpu', c_uint8),
+              ('pid',  c_uint16), ('job', c_uint32)]
 
-def process_release(task_dict, record):
-    data = task_dict[record.pid]
-    data.jobs += 1
-    if data.params:
-        data.misses.start_time(record, record.when + data.params.period)
+    def fill(self, data):
+        memmove(addressof(self), data, RECORD_SIZE)
 
-def process_param(task_dict, record):
-    params = TaskParams(record.wcet, record.period, record.partition)
-    task_dict[record.pid].params = params
+    def process(self, task_dict):
+        raise NotImplementedError()
 
-def process_block(task_dict, record):
-    task_dict[record.pid].blocks.start_time(record)
+class ParamRecord(SchedRecord):
+    FIELDS = [('wcet', c_uint32),  ('period', c_uint32),
+              ('phase', c_uint32), ('partition', c_uint8)]
 
-def process_resume(task_dict, record):
-    task_dict[record.pid].blocks.store_time(record)
+    def process(self, task_dict):
+        params = TaskParams(self.wcet, self.period, self.partition)
+        task_dict[self.pid].params = params
 
-register_record('ResumeRecord', 9, process_resume, 'Q8x', ['when'])
-register_record('BlockRecord', 8, process_block, 'Q8x', ['when'])
-register_record('CompletionRecord', 7, process_completion, 'Q8x', ['when'])
-register_record('ReleaseRecord', 3, process_release, 'QQ', ['when', 'release'])
-register_record('ParamRecord', 2, process_param, 'IIIcc2x',
-                          ['wcet','period','phase','partition', 'task_class'])
+class ReleaseRecord(SchedRecord):
+    FIELDS = [('when', c_uint64), ('release', c_uint64)]
+
+    def process(self, task_dict):
+        data = task_dict[self.pid]
+        data.jobs += 1
+        if data.params:
+            data.misses.start_time(self, self.when + data.params.period)
+
+class CompletionRecord(SchedRecord):
+    FIELDS = [('when', c_uint64)]
+
+    def process(self, task_dict):
+        task_dict[self.pid].misses.store_time(self)
+
+class BlockRecord(SchedRecord):
+    FIELDS = [('when', c_uint64)]
+
+    def process(self, task_dict):
+        task_dict[self.pid].blocks.start_time(self)
+
+class ResumeRecord(SchedRecord):
+    FIELDS = [('when', c_uint64)]
+
+    def process(self, task_dict):
+        task_dict[self.pid].blocks.store_time(self)
+
+# Map records to sched_trace ids (see include/litmus/sched_trace.h
+register_record(2, ParamRecord)
+register_record(3, ReleaseRecord)
+register_record(7, CompletionRecord)
+register_record(8, BlockRecord)
+register_record(9, ResumeRecord)
 
 def create_task_dict(data_dir, work_dir = None):
     '''Parse sched trace files'''
