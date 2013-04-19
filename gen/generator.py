@@ -69,10 +69,10 @@ class Generator(object):
         else:
             cpus = num_cpus()
         try:
-            config = get_config_option("RELEASE_MASTER") and True
+            rm_config  = get_config_option("RELEASE_MASTER") and True
         except:
-            config = False
-        release_master = list(set([False, config]))
+            rm_config  = False
+        release_master = list(set([False, bool(rm_config)]))
 
 
         return [GenOption('tasks', int, range(cpus, 5*cpus, cpus),
@@ -147,7 +147,10 @@ class Generator(object):
         '''Set default parameter values and check that values are valid.'''
         for option in self.options:
             if option.name not in params:
-                params[option.name] = option.default
+                val = option.default
+                val = val if type(val) == type([]) else [val]
+
+                params[option.name] = val
             else:
                 option.hidden = True
             params[option.name] = self._check_value(option.name,
