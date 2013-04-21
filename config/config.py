@@ -39,13 +39,18 @@ DEFAULTS = {'params_file' : 'params.py',
             'sched_file'  : 'sched.py',
             'duration'    : 10,
             'prog'        : 'rtspin',
+            'out-gen'     : 'exps',
+            'out-run'     : 'run-data',
+            'out-parse'   : 'parse-data',
+            'out-plot'    : 'plot-data',
             'cycles'      : ft_freq() or 2000}
+
 
 '''Default sched_trace events (this is all of them).'''
 SCHED_EVENTS = range(501, 513)
 
 '''Overhead events.'''
-OVH_BASE_EVENTS  = ['SCHED', 'RELEASE', 'SCHED2', 'TICK', 'CXS']
+OVH_BASE_EVENTS  = ['SCHED', 'RELEASE', 'SCHED2', 'TICK', 'CXS', 'LOCK', 'UNLOCK']
 OVH_ALL_EVENTS   = ["%s_%s" % (e, t) for (e,t) in
                     itertools.product(OVH_BASE_EVENTS, ["START","END"])]
 OVH_ALL_EVENTS  += ['RELEASE_LATENCY']

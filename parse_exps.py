@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 from __future__ import print_function
 
-import config.config as conf
 import os
 import parse.ft as ft
 import parse.sched as st
@@ -12,6 +11,7 @@ import traceback
 
 from collections import namedtuple
 from common import load_params
+from config.config import DEFAULTS,PARAMS
 from optparse import OptionParser
 from parse.point import ExpPoint
 from parse.tuple_table import TupleTable
@@ -22,7 +22,8 @@ def parse_args():
     parser = OptionParser("usage: %prog [options] [data_dir]...")
 
     parser.add_option('-o', '--out', dest='out',
-                      help='file or directory for data output', default='parse-data')
+                      help='file or directory for data output',
+                      default=DEFAULTS['out-parse'])
     parser.add_option('-i', '--ignore', metavar='[PARAM...]', default="",
                       help='ignore changing parameter values')
     parser.add_option('-f', '--force', action='store_true', default=False,
@@ -41,7 +42,7 @@ def parse_args():
 ExpData = namedtuple('ExpData', ['path', 'params', 'work_dir'])
 
 def get_exp_params(data_dir, cm_builder):
-    param_file = "%s/%s" % (data_dir, conf.DEFAULTS['params_file'])
+    param_file = "%s/%s" % (data_dir, DEFAULTS['params_file'])
     if os.path.isfile(param_file):
         params = load_params(param_file)
 
@@ -53,8 +54,8 @@ def get_exp_params(data_dir, cm_builder):
          params = {}
 
     # Cycles must be present for feather-trace measurement parsing
-    if conf.PARAMS['cycles'] not in params:
-        params[conf.PARAMS['cycles']] = conf.DEFAULTS['cycles']
+    if PARAMS['cycles'] not in params:
+        params[PARAMS['cycles']] = DEFAULTS['cycles']
 
     return params
 
@@ -101,7 +102,7 @@ def parse_exp(exp_force):
     if not result:
         try:
             result = ExpPoint(exp.path)
-            cycles = exp.params[conf.PARAMS['cycles']]
+            cycles = exp.params[PARAMS['cycles']]
 
             # Write overheads into result
             ft.extract_ft_data(result, exp.path, exp.work_dir, cycles)
@@ -116,21 +117,31 @@ def parse_exp(exp_force):
 
     return (exp, result)
 
+def get_exps(args):
+    if args:
+        return args
+    elif os.path.exists(DEFAULTS['out-run']):
+        sys.stderr.write("Reading data from %s/*\n" % DEFAULTS['out-run'])
+        sched_dirs = os.listdir(DEFAULTS['out-run'])
+        return ['%s/%s' % (DEFAULTS['out-run'], d) for d in sched_dirs]
+    else:
+        sys.stderr.write("Reading data from current directory.\n")
+        return [os.getcwd()]
+
 def main():
     opts, args = parse_args()
-
-    args = args or [os.getcwd()]
+    exp_dirs  = get_exps(args)
 
     # Load exp parameters into a ColMap
     builder = ColMapBuilder()
-    exps = load_exps(args, builder, opts.force)
+    exps = load_exps(exp_dirs, builder, opts.force)
 
     # Don't track changes in ignored parameters
     if opts.ignore:
         for param in opts.ignore.split(","):
             builder.try_remove(param)
     # Always average multiple trials
-    builder.try_remove(conf.PARAMS['trial'])
+    builder.try_remove(PARAMS['trial'])
 
     col_map = builder.build()
     result_table = TupleTable(col_map)
@@ -175,7 +186,8 @@ def main():
         # No csvs to write, assume user meant to print out data
         if dir_map.is_empty():
             if not opts.verbose:
-                sys.stderr.write("Too little data to make csv files.\n")
+                sys.stderr.write("Too little data to make csv files, " +
+                                 "printing results.\n")
                 for key, exp in result_table:
                     for e in exp:
                         print(e)
