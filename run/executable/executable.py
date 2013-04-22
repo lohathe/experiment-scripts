@@ -59,6 +59,9 @@ class Executable(object):
     def interrupt(self):
         self.sp.send_signal(signal.SIGINT)
 
+    def poll(self):
+        return self.sp.poll()
+
     def terminate(self):
         '''Send the terminate signal to the binary.'''
         self.sp.terminate()

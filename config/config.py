@@ -9,7 +9,7 @@ BINS = {'rtspin'    : get_executable_hint('rtspin', 'liblitmus'),
         'ftsplit'   : get_executable_hint('ft2csv', 'feather-trace-tools'),
         'ftsort'    : get_executable_hint('ftsort', 'feather-trace-tools'),
         'st_trace'  : get_executable_hint('st_trace', 'feather-trace-tools'),
-        # Option, as not everyone uses kernelshark yet
+        # Optional, as not everyone uses kernelshark yet
         'trace-cmd' : get_executable_hint('trace-cmd', 'rt-kernelshark', True),
         # Optional, as sched_trace is not a publically supported repository
         'st_show'   : get_executable_hint('st_show', 'sched_trace', True)}

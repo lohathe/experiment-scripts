@@ -140,8 +140,8 @@ def main():
     if opts.ignore:
         for param in opts.ignore.split(","):
             builder.try_remove(param)
-    # Always average multiple trials
-    builder.try_remove(PARAMS['trial'])
+    builder.try_remove(PARAMS['trial'])  # Always average multiple trials
+    builder.try_remove(PARAMS['cycles']) # Only need for feather-trace parsing
 
     col_map = builder.build()
     result_table = TupleTable(col_map)
