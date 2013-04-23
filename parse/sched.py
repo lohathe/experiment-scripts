@@ -5,35 +5,55 @@ import struct
 import subprocess
 
 from collections import defaultdict,namedtuple
-from common import recordtype
+from common import recordtype,log_once
 from point import Measurement
 from ctypes import *
 
 class TimeTracker:
     '''Store stats for durations of time demarcated by sched_trace records.'''
     def __init__(self):
-        self.begin = self.avg = self.max = self.num = self.job = 0
+        self.begin = self.avg = self.max = self.num = self.next_job = 0
 
-    def store_time(self, record):
+        # Count of times the job in start_time matched that in store_time
+        self.matches = 0
+        # And the times it didn't
+        self.disjoints = 0
+
+        # Measurements are recorded in store_ time using the previous matching
+        # record which was passed to store_time. This way, the last record for
+        # any task is always skipped
+        self.last_record = None
+
+    def store_time(self, next_record):
         '''End duration of time.'''
-        dur = record.when - self.begin
+        dur = (self.last_record.when - self.begin) if self.last_record else -1
 
-        if self.job == record.job and dur > 0:
-            self.max  = max(self.max, dur)
-            self.avg *= float(self.num / (self.num + 1))
-            self.num += 1
-            self.avg += dur / float(self.num)
+        if self.next_job == next_record.job:
+            self.last_record = next_record
 
-            self.begin = 0
-            self.job   = 0
+            if self.last_record:
+                self.matches += 1
+
+            if dur > 0:
+                self.max  = max(self.max, dur)
+                self.avg *= float(self.num / (self.num + 1))
+                self.num += 1
+                self.avg += dur / float(self.num)
+
+                self.begin = 0
+                self.next_job   = 0
+        else:
+            self.disjoints += 1
 
     def start_time(self, record, time = None):
         '''Start duration of time.'''
-        if not time:
-            self.begin = record.when
-        else:
-            self.begin = time
-        self.job = record.job
+        if self.last_record:
+            if not time:
+                self.begin = self.last_record.when
+            else:
+                self.begin = time
+
+        self.next_job = record.job
 
 # Data stored for each task
 TaskParams = namedtuple('TaskParams',  ['wcet', 'period', 'cpu'])
@@ -203,6 +223,12 @@ def create_task_dict(data_dir, work_dir = None):
 
     return task_dict
 
+LOSS_MSG = """Found task missing more than %d%% of its scheduling records.
+These won't be included in scheduling statistics!"""%(100*conf.MAX_RECORD_LOSS)
+SKIP_MSG = """Measurement '%s' has no non-zero values.
+Measurements like these are not included in scheduling statistics.
+If a measurement is missing, this is why."""
+
 def extract_sched_data(result, data_dir, work_dir):
     task_dict = create_task_dict(data_dir, work_dir)
     stat_data = defaultdict(list)
@@ -213,19 +239,29 @@ def extract_sched_data(result, data_dir, work_dir):
             # Currently unknown where these invalid tasks come from...
             continue
 
-        miss_ratio = float(tdata.misses.num) / tdata.jobs
-        stat_data["miss-ratio"].append(float(tdata.misses.num) / tdata.jobs)
+        miss = tdata.misses
 
-        stat_data["max-tard"  ].append(tdata.misses.max / tdata.params.wcet)
-        # Scale average down to account for jobs with 0 tardiness
-        avg_tard = tdata.misses.avg * miss_ratio
-        stat_data["avg-tard"  ].append(avg_tard / tdata.params.wcet)
+        record_loss = float(miss.disjoints)/(miss.matches + miss.disjoints)
+        stat_data["record-loss"].append(record_loss)
 
-        stat_data["avg-block" ].append(tdata.blocks.avg / NSEC_PER_MSEC)
-        stat_data["max-block" ].append(tdata.blocks.max / NSEC_PER_MSEC)
+        if record_loss > conf.MAX_RECORD_LOSS:
+            log_once(LOSS_MSG)
+            continue
+
+        miss_ratio = float(miss.num) / miss.matches
+        avg_tard = miss.avg * miss_ratio
+
+        stat_data["miss-ratio" ].append(miss_ratio)
+
+        stat_data["max-tard"].append(miss.max / tdata.params.period)
+        stat_data["avg-tard"].append(avg_tard / tdata.params.period)
+
+        stat_data["avg-block"].append(tdata.blocks.avg / NSEC_PER_MSEC)
+        stat_data["max-block"].append(tdata.blocks.max / NSEC_PER_MSEC)
 
     # Summarize value groups
     for name, data in stat_data.iteritems():
         if not data or not sum(data):
+            log_once(SKIP_MSG, SKIP_MSG % name)
             continue
         result[name] = Measurement(str(name)).from_array(data)

@@ -56,3 +56,7 @@ OVH_ALL_EVENTS   = ["%s_%s" % (e, t) for (e,t) in
 OVH_ALL_EVENTS  += ['RELEASE_LATENCY']
 # This event doesn't have a START and END
 OVH_BASE_EVENTS += ['RELEASE_LATENCY']
+
+# If a task is missing more than this many records, its measurements
+# are not included in sched_trace summaries
+MAX_RECORD_LOSS = .2
