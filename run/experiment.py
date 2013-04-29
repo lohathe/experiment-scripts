@@ -2,6 +2,7 @@ import os
 import time
 import run.litmus_util as lu
 import shutil as sh
+
 from operator import methodcaller
 
 class ExperimentException(Exception):
@@ -69,21 +70,24 @@ class Experiment(object):
             executable.cwd = self.working_dir
         map(assign_cwd, self.executables)
 
-    def __kill_all(self):
-        if lu.waiting_tasks():
-            released = lu.release_tasks()
-            self.log("Re-released %d tasks" % released)
+    def __try_kill_all(self):
+        try:
+            if lu.waiting_tasks():
+                released = lu.release_tasks()
+                self.log("Re-released %d tasks" % released)
+
+                time.sleep(1)
+
+            self.log("Killing all tasks")
+            for e in self.executables:
+                try:
+                    e.kill()
+                except:
+                    pass
 
             time.sleep(1)
-
-        self.log("Killing all tasks")
-        for e in self.executables:
-            try:
-                e.kill()
-            except:
-                pass
-
-        time.sleep(1)
+        except:
+            self.log("Failed to kill all tasks.")
 
     def __strip_path(self, path):
         '''Shorten path to something more readable.'''
@@ -138,7 +142,7 @@ class Experiment(object):
             now_ready = lu.waiting_tasks()
             if now_ready != num_ready:
                 wait_start = time.time()
-                num_ready  = lu.now_ready
+                num_ready  = now_ready
 
     def __run_tasks(self):
         self.log("Starting %d tasks" % len(self.executables))
@@ -185,6 +189,7 @@ class Experiment(object):
 
         sched = lu.scheduler()
         if sched != "Linux":
+            self.log("Switching back to Linux scheduler")
             try:
                 lu.switch_scheduler("Linux")
             except:
@@ -229,6 +234,8 @@ class Experiment(object):
         self.log("Stopping regular tracers")
         map(methodcaller('stop_tracing'), self.regular_tracers)
 
+        os.system('sync')
+
     def log(self, msg):
         print("[Exp %s]: %s" % (self.name, msg))
 
@@ -236,6 +243,7 @@ class Experiment(object):
         self.__to_linux()
 
         succ = False
+        exception = None
         try:
             self.__setup()
 
@@ -244,16 +252,20 @@ class Experiment(object):
                 self.log("Saving results in %s" % self.finished_dir)
                 succ = True
             except Exception as e:
+                exception = e
+
                 # Give time for whatever failed to finish failing
                 time.sleep(2)
-                self.__kill_all()
 
-                raise e
-            finally:
-                self.__teardown()
+                self.__try_kill_all()
         finally:
-            self.log("Switching back to Linux scheduler")
-            self.__to_linux()
+            try:
+                self.__teardown()
+                self.__to_linux()
+            except Exception as e:
+                exception = exception or e
+            finally:
+                if exception: raise exception
 
         if succ:
             self.__save_results()
