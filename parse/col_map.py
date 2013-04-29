@@ -19,7 +19,7 @@ class ColMapBuilder(object):
 
 class ColMap(object):
     def __init__(self, col_list, values = None):
-        self.col_list = col_list
+        self.col_list = sorted(col_list)
         self.rev_map = {}
         self.values = values
 
@@ -47,7 +47,7 @@ class ColMap(object):
             if col not in kv:
                 key += (None,)
             else:
-                key += (kv[col],)
+                key += (str(kv[col]),)
 
         return key
 

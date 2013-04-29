@@ -23,7 +23,7 @@ class TupleTable(object):
 
     def __setitem__(self, kv, value):
         key = self.col_map.get_key(kv)
-        self.table[key]
+        self.table[key] = value
 
     def __contains__(self, kv):
         key = self.col_map.get_key(kv)
