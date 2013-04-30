@@ -12,7 +12,7 @@ import sys
 import traceback
 
 from collections import namedtuple
-from config.config import DEFAULTS,PARAMS
+from config.config import FILES,DEFAULTS,PARAMS
 from optparse import OptionParser
 from parse.point import ExpPoint
 from parse.tuple_table import TupleTable
@@ -85,7 +85,7 @@ def parse_exp(exp_force):
 
 
 def get_exp_params(data_dir, cm_builder):
-    param_file = "%s/%s" % (data_dir, DEFAULTS['params_file'])
+    param_file = "%s/%s" % (data_dir, FILES['params_file'])
     if os.path.isfile(param_file):
         params = com.load_params(param_file)
 

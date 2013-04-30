@@ -9,9 +9,9 @@ import shutil
 import sys
 import run.tracer as trace
 
-from config.config import PARAMS,DEFAULTS
+from config.config import PARAMS,DEFAULTS,FILES
 from collections import namedtuple
-from optparse import OptionParser
+from optparse import OptionParser,OptionGroup
 from parse.enum import Enum
 from run.executable.executable import Executable
 from run.experiment import Experiment,ExperimentDone,SystemCorrupted
@@ -61,30 +61,34 @@ def parse_args():
 
     parser.add_option('-s', '--scheduler', dest='scheduler',
                       help='scheduler for all experiments')
+    parser.add_option('-d', '--duration', dest='duration', type='int',
+                      help='duration (seconds) of tasks')
     parser.add_option('-i', '--ignore-environment', dest='ignore',
                       action='store_true', default=False,
                       help='run experiments even in invalid environments ')
-    parser.add_option('-d', '--duration', dest='duration', type='int',
-                      help='duration (seconds) of tasks')
+    parser.add_option('-f', '--force', action='store_true', default=False,
+                      dest='force', help='overwrite existing data')
     parser.add_option('-o', '--out-dir', dest='out_dir',
                       help='directory for data output',
                       default=DEFAULTS['out-run'])
-    parser.add_option('-p', '--params', dest='param_file',
-                      help='file with experiment parameters')
-    parser.add_option('-c', '--schedule-file', dest='sched_file',
-                      help='name of schedule files within directories',
-                      default=DEFAULTS['sched_file'])
-    parser.add_option('-f', '--force', action='store_true', default=False,
-                      dest='force', help='overwrite existing data')
-    parser.add_option('-j', '--jabber', metavar='username@domain',
-                      dest='jabber', default=None,
-                      help='send a jabber message when an experiment completes')
-    parser.add_option('-e', '--email', metavar='username@server',
-                      dest='email', default=None,
-                      help='send an email when all experiments complete')
-    parser.add_option('-r', '--retry', dest='retry',
-                      action='store_true', default=False,
-                      help='retry failed experiments')
+
+    group = OptionGroup(parser, "Communication Options")
+    group.add_option('-j', '--jabber', metavar='username@domain',
+                     dest='jabber', default=None,
+                     help='send a jabber message when an experiment completes')
+    group.add_option('-e', '--email', metavar='username@server',
+                     dest='email', default=None,
+                     help='send an email when all experiments complete')
+    parser.add_option_group(group)
+
+    group = OptionGroup(parser, "Persistence Options")
+    group.add_option('-r', '--retry', dest='retry', action='store_true',
+                     default=False, help='retry failed experiments')
+    group.add_option('-c', '--crontab', dest='crontab',
+                     action='store_true', default=False,
+                     help='use crontab to resume interrupted script after '
+                     'system restarts. implies --retry')
+    parser.add_option_group(group)
 
     return parser.parse_args()
 
@@ -220,12 +224,12 @@ def run_script(script_params, exp, exp_dir, out_dir):
     out.close()
 
 
-def make_exp_params(cmd_scheduler, cmd_duration, sched_dir, param_file):
+def make_exp_params(cmd_scheduler, cmd_duration, sched_dir):
     '''Return ExpParam with configured values of all hardcoded params.'''
     kernel = copts = ""
 
     # Load parameter file
-    param_file = param_file or "%s/%s" % (sched_dir, DEFAULTS['params_file'])
+    param_file = "%s/%s" % (sched_dir, FILES['params_file'])
     if os.path.isfile(param_file):
         fparams = com.load_params(param_file)
     else:
@@ -303,7 +307,7 @@ def run_experiment(data, start_message, ignore, jabber):
     if ft_freq:
         out_params[PARAMS['cycles']] = ft_freq
 
-    out_param_f = "%s/%s" % (data.out_dir, DEFAULTS['params_file'])
+    out_param_f = "%s/%s" % (data.out_dir, FILES['params_file'])
     with open(out_param_f, 'w') as f:
         pprint.pprint(out_params, f)
 
@@ -320,7 +324,7 @@ def make_paths(exp, opts, out_base_dir):
         shutil.rmtree(out_dir)
 
     if os.path.isdir(path):
-        sched_file = "%s/%s" % (path, opts.sched_file)
+        sched_file = "%s/%s" % (path, FILES['sched_file'])
     else:
         sched_file = path
 
@@ -348,10 +352,10 @@ def get_exps(opts, args, out_base_dir):
     '''Return list of ExpDatas'''
 
     if not args:
-        if os.path.exists(opts.sched_file):
+        if os.path.exists(FILES['sched_file']):
             # Default to sched_file in current directory
-            sys.stderr.write("Reading schedule from %s.\n" % opts.sched_file)
-            args = [opts.sched_file]
+            sys.stderr.write("Reading schedule from %s.\n" % FILES['sched_file'])
+            args = [FILES['sched_file']]
         elif os.path.exists(DEFAULTS['out-gen']):
             # Then try experiments created by gen_exps
             sys.stderr.write("Reading schedules from %s/*.\n" % DEFAULTS['out-gen'])
@@ -370,8 +374,8 @@ def get_exps(opts, args, out_base_dir):
         name = path[len(common):]
 
         sched_dir  = os.path.split(sched_file)[0]
-        exp_params = make_exp_params(opts.scheduler, opts.duration,
-                                     sched_dir, opts.param_file)
+
+        exp_params = make_exp_params(opts.scheduler, opts.duration, sched_dir)
 
         exps += [ExpData(name, exp_params, sched_file, out_dir,
                          0, ExpState.None)]
