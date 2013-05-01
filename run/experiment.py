@@ -35,6 +35,9 @@ class Experiment(object):
         self.exec_err = None
         self.tracer_types = tracer_types
 
+        self.regular_tracers = []
+        self.exact_tracers = []
+
     def __setup_tracers(self):
         tracers = [ t(self.working_dir) for t in self.tracer_types ]
 
@@ -55,8 +58,13 @@ class Experiment(object):
                      Experiment.INTERRUPTED_DIR)
             interrupted = "%s/%s" % (os.path.split(self.working_dir)[0],
                                      Experiment.INTERRUPTED_DIR)
+            old_int = "%s/%s" % (self.working_dir, Experiment.INTERRUPTED_DIR)
+
             if os.path.exists(interrupted):
                 sh.rmtree(interrupted)
+            if os.path.exists(old_int):
+                sh.rmtree(old_int)
+
             os.rename(self.working_dir, interrupted)
 
         os.mkdir(self.working_dir)

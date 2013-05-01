@@ -3,10 +3,12 @@ from __future__ import print_function
 
 import common as com
 import os
+import pickle
 import pprint
 import re
 import shutil
 import sys
+import run.crontab as cron
 import run.tracer as trace
 
 from config.config import PARAMS,DEFAULTS,FILES
@@ -16,9 +18,6 @@ from parse.enum import Enum
 from run.executable.executable import Executable
 from run.experiment import Experiment,ExperimentDone,SystemCorrupted
 from run.proc_entry import ProcEntry
-
-'''Maximum times an experiment will be retried'''
-MAX_RETRY = 5
 
 '''Customizable experiment parameters'''
 ExpParams = namedtuple('ExpParams', ['scheduler', 'duration', 'tracers',
@@ -30,6 +29,11 @@ ExpData  = com.recordtype('ExpData', ['name', 'params', 'sched_file', 'out_dir',
                                       'retries', 'state'])
 '''Comparison of requested versus actual kernel compile parameter value'''
 ConfigResult = namedtuple('ConfigResult', ['param', 'wanted', 'actual'])
+
+'''Maximum times an experiment will be retried'''
+MAX_RETRY = 5
+'''Location experiment retry count is stored'''
+TRIES_FNAME = ".tries.pkl"
 
 
 class InvalidKernel(Exception):
@@ -88,6 +92,9 @@ def parse_args():
                      action='store_true', default=False,
                      help='use crontab to resume interrupted script after '
                      'system restarts. implies --retry')
+    group.add_option('-k', '--kill-crontab', dest='kill',
+                     action='store_true', default=False,
+                     help='kill existing script crontabs and exit')
     parser.add_option_group(group)
 
     return parser.parse_args()
@@ -314,7 +321,7 @@ def run_experiment(data, start_message, ignore, jabber):
 
 def make_paths(exp, opts, out_base_dir):
     '''Translate experiment name to (schedule file, output directory) paths'''
-    path = "%s/%s" % (os.getcwd(), exp)
+    path = os.path.abspath(exp)
     out_dir = "%s/%s" % (out_base_dir, os.path.split(exp.strip('/'))[1])
 
     if not os.path.exists(path):
@@ -408,10 +415,35 @@ def setup_email(target):
     return None
 
 
+def tries_file(exp):
+    return "%s/%s" % (os.path.split(exp.sched_file)[0], TRIES_FNAME)
+
+
+def get_tries(exp):
+    if not os.path.exists(tries_file(exp)):
+        return 0
+    with open(tries_file(exp), 'r') as f:
+        return int(pickle.load(f))
+
+
+def set_tries(exp, val):
+    if not val:
+        if os.path.exists(tries_file(exp)):
+            os.remove(tries_file(exp))
+    else:
+        with open(tries_file(exp), 'w') as f:
+            pickle.dump(str(val), f)
+    os.system('sync')
+
+
 def run_exps(exps, opts):
     jabber = setup_jabber(opts.jabber) if opts.jabber else None
 
-    exps_remaining = list(enumerate(exps))
+    # Give each experiment a unique id
+    exps_remaining = enumerate(exps)
+    # But run experiments which have failed the most last
+    exps_remaining = sorted(exps_remaining, key=lambda x: get_tries(x[1]))
+
     while exps_remaining:
         i, exp = exps_remaining.pop(0)
 
@@ -419,17 +451,26 @@ def run_exps(exps, opts):
         start_message = "%s experiment %d of %d." % (verb, i+1, len(exps))
 
         try:
+            set_tries(exp, get_tries(exp) + 1)
+            if get_tries(exp) > MAX_RETRY:
+                raise Exception("Hit maximum retries of %d" % MAX_RETRY)
+
             run_experiment(exp, start_message, opts.ignore, jabber)
+
+            set_tries(exp, 0)
             exp.state = ExpState.Succeeded
         except KeyboardInterrupt:
             sys.stderr.write("Keyboard interrupt, quitting\n")
+            set_tries(exp, get_tries(exp) - 1)
             break
         except ExperimentDone:
             sys.stderr.write("Experiment already completed at '%s'\n" % exp.out_dir)
+            set_tries(exp, 0)
             exp.state = ExpState.Done
         except (InvalidKernel, InvalidConfig) as e:
             sys.stderr.write("Invalid environment for experiment '%s'\n" % exp.name)
             sys.stderr.write("%s\n" % e)
+            set_tries(exp, get_tries(exp) - 1)
             exp.state = ExpState.Invalid
         except SystemCorrupted as e:
             sys.stderr.write("System is corrupted! Fix state before continuing.\n")
@@ -445,17 +486,19 @@ def run_exps(exps, opts):
             exp.state = ExpState.Failed
 
         if exp.state is ExpState.Failed and opts.retry:
-            if exp.retries < MAX_RETRY:
-                exps_remaining += [(i, exp)]
-                exp.retries += 1
-            else:
-                sys.stderr.write("Hit maximum retries of %d\n" % MAX_RETRY)
+            exps_remaining += [(i, exp)]
+
 
 def main():
     opts, args = parse_args()
 
+    if opts.kill:
+        cron.kill_boot_job()
+        sys.exit(1)
+
     email = setup_email(opts.email) if opts.email else None
 
+    # Create base output directory for run data
     out_base = os.path.abspath(opts.out_dir)
     created  = False
     if not os.path.exists(out_base):
@@ -464,7 +507,24 @@ def main():
 
     exps = get_exps(opts, args, out_base)
 
-    run_exps(exps, opts)
+    if opts.crontab:
+        # Resume script on startup
+        opts.retry = True
+        cron.install_boot_job(['f', '--forced'],
+                              "Stop with %s -k" % com.get_cmd())
+
+    if opts.force or not opts.retry:
+        cron.clean_output()
+        for e in exps:
+            set_tries(e, 0)
+
+    try:
+        run_exps(exps, opts)
+    finally:
+        # Remove persistent state
+        for e in exps:
+            set_tries(e, 0)
+        cron.remove_boot_job()
 
     def state_count(state):
         return len(filter(lambda x: x.state is state, exps))
