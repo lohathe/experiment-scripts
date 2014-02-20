@@ -5,7 +5,7 @@ TP_TBASE = """#for $t in $task_set
 {} $t.cost $t.period
 #end for"""
 TP_GLOB_TASK = TP_TBASE.format("")
-TP_PART_TASK = TP_TBASE.format("-p $t.cpu")
+TP_PART_TASK = TP_TBASE.format("-p $t.cluster")
 
 class EdfGenerator(gen.Generator):
     '''Creates sporadic task sets with the most common Litmus options.'''
@@ -51,22 +51,22 @@ class PartitionedGenerator(EdfGenerator):
             templates + [TP_PART_TASK], options, params)
 
     def _customize(self, taskset, exp_params):
-        cpus  = exp_params['cpus']
-        start = 0
-        if exp_params['release_master']:
-            cpus -= 1
-            start = 1
+        clusters  = exp_params['clusters']
+
+        utils = [0]*clusters
+        tasks = [0]*clusters
+
+        if exp_params['release_master'] and clusters != exp_params['cpus']:
+            # The first cluster is one CPU smaller to accomodate the
+            # release master. Increase the first cluster's utilization
+            # to account for this.
+            utils[0] += 1
 
         # Partition using worst-fit for most even distribution
-        utils = [0]*cpus
-        tasks = [0]*cpus
         for t in taskset:
-            t.cpu = utils.index(min(utils))
-            utils[t.cpu] += t.utilization()
-            tasks[t.cpu] += 1
-
-            # Increment by one so release master has no tasks
-            t.cpu += start
+            t.cluster = utils.index(min(utils))
+            utils[t.cluster] += t.utilization()
+            tasks[t.cluster] += 1
 
 class PedfGenerator(PartitionedGenerator):
     def __init__(self, params={}):
@@ -74,7 +74,7 @@ class PedfGenerator(PartitionedGenerator):
 
 class CedfGenerator(PartitionedGenerator):
     TP_CLUSTER = "plugins/C-EDF/cluster{$level}"
-    CLUSTER_OPTION = gen.GenOption('level', ['L2', 'L3', 'All'], 'L2',
+    CLUSTER_OPTION = gen.GenOption('level', ['L1', 'L2', 'L3', 'All'], 'L2',
                                    'Cache clustering level.',)
 
     def __init__(self, params={}):

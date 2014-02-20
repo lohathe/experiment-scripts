@@ -68,6 +68,13 @@ class Generator(object):
             cpus = min(map(int, params['cpus']))
         else:
             cpus = num_cpus()
+
+        if 'clusters' in params:
+            clusters = min(map(int, params['clusters']))
+        else:
+            # default to partitioned
+            clusters = num_cpus()
+
         try:
             rm_config  = get_config_option("RELEASE_MASTER") and True
         except:
@@ -79,6 +86,8 @@ class Generator(object):
                               'Number of tasks per experiment.'),
                 GenOption('cpus', int, [cpus],
                           'Number of processors on target system.'),
+                GenOption('clusters', int, [clusters],
+                          'Number of clusters on target system.'),
                 GenOption('release_master', [True,False], release_master,
                           'Redirect release interrupts to a single CPU.'),
                 GenOption('duration', float, [30], 'Experiment duration.')]
