@@ -8,52 +8,92 @@ from collections import defaultdict,namedtuple
 from common import recordtype,log_once
 from point import Measurement
 from ctypes import *
+from heapq import *
 
 class TimeTracker:
     '''Store stats for durations of time demarcated by sched_trace records.'''
-    def __init__(self):
-        self.begin = self.avg = self.max = self.num = self.next_job = 0
+    def __init__(self, is_valid_duration = lambda x: True, capper = lambda x: x, delay_buffer_size = 1, max_pending = -1):
+        self.validator = is_valid_duration
+        self.capper = capper
+        self.avg = self.max = self.num = 0
+        self.all_measurements = []
+        self.all_measurements_arr = None
 
-        # Count of times the job in start_time matched that in store_time
         self.matches = 0
-        # And the times it didn't
-        self.disjoints = 0
 
-        # Measurements are recorded in store_ time using the previous matching
-        # record which was passed to store_time. This way, the last record for
-        # any task is always skipped
-        self.last_record = None
+        self.max_pending = max_pending
+        self.discarded = 0
 
-    def store_time(self, next_record):
-        '''End duration of time.'''
-        dur = (self.last_record.when - self.begin) if self.last_record else -1
+        self.delay_buffer_size = delay_buffer_size
+        self.start_delay_buffer = []
+        self.end_delay_buffer = []
+        self.start_records = {}
+        self.end_records = {}
 
-        if self.next_job == next_record.job:
-            self.last_record = next_record
+    def disjoints(self):
+        unmatched = len(self.start_records) + len(self.end_records)
+        return self.discarded + unmatched
 
-            if self.last_record:
-                self.matches += 1
+    def stdev(self):
+        if self.all_measurements_arr is None:
+            self.all_measurements_arr = np.asarray(self.all_measurements)
+            self.all_measurements_arr.sort()
+        return np.std(self.all_measurements_arr)
 
-            if dur > 0:
-                self.max  = max(self.max, dur)
-                self.avg *= float(self.num / (self.num + 1))
+    def percentile(self, which):
+        if self.all_measurements_arr is None:
+            self.all_measurements_arr = np.asarray(self.all_measurements)
+            self.all_measurements_arr.sort()
+        return stats.scoreatpercentile(self.all_measurements_arr, which)
+
+    def process_completed(self):
+        completed = self.start_records.viewkeys() & self.end_records.viewkeys()
+        self.matches += len(completed)
+        for c in completed:
+            s, stime = self.start_records[c]
+            e, etime = self.end_records[c]
+            del self.start_records[c]
+            del self.end_records[c]
+
+            dur = self.capper(etime - stime)
+            if self.validator(dur):
+                self.max = max(self.max, dur)
+                old_avg = self.avg * self.num
                 self.num += 1
-                self.avg += dur / float(self.num)
+                self.avg = (old_avg + dur) / float(self.num)
+                self.all_measurements.append(dur)
 
-                self.begin = 0
-                self.next_job   = 0
-        else:
-            self.disjoints += 1
+        # Give up on some jobs if they've been hanging around too long.
+        # While not strictly needed, it helps improve performance and
+        # it is unlikey to cause too much trouble.
+        if(self.max_pending >= 0 and len(self.start_records) > self.max_pending):
+            to_discard = len(self.start_records) - self.max_pending
+            for i in range(to_discard):
+                # pop off the oldest jobs
+                del self.start_records[self.start_records.iterkeys().next()]
+            self.discarded += to_discard
+        if(self.max_pending >= 0 and len(self.end_records) > self.max_pending):
+            to_discard = len(self.end_records) - self.max_pending
+            for i in range(to_discard):
+                # pop off the oldest jobs
+                del self.end_records[self.end_records.iterkeys().next()]
+            self.discarded += to_discard
 
-    def start_time(self, record, time = None):
+    def end_time(self, record, time):
+        '''End duration of time.'''
+        if len(self.end_delay_buffer) == self.delay_buffer_size:
+           to_queue = self.end_delay_buffer.pop(0)
+           self.end_records[to_queue[0].job] = to_queue
+        self.end_delay_buffer.append((record, time))
+        self.process_completed()
+
+    def start_time(self, record, time):
         '''Start duration of time.'''
-        if self.last_record:
-            if not time:
-                self.begin = self.last_record.when
-            else:
-                self.begin = time
-
-        self.next_job = record.job
+        if len(self.start_delay_buffer) == self.delay_buffer_size:
+            to_queue = self.start_delay_buffer.pop(0)
+            self.start_records[to_queue[0].job] = to_queue
+        self.start_delay_buffer.append((record, time))
+        self.process_completed()
 
 # Data stored for each task
 TaskParams = namedtuple('TaskParams',  ['wcet', 'period', 'cpu'])
@@ -139,31 +179,34 @@ def make_iterator(fname):
 
 def read_data(task_dict, fnames):
     '''Read records from @fnames and store per-pid stats in @task_dict.'''
-    buff = []
+
+    # A time-stamp ordered heap
+    q = []
+
+    # Number of trace records to q from each stream/file. A heap
+    # of this size is maintained in order to deal with events that
+    # were recorded out-of-order.
+    window_size = 500
 
     def get_time(record):
         return record.when if hasattr(record, 'when') else 0
 
     def add_record(itera):
-        # Ordered insertion into buff
         try:
             arecord = itera.next()
         except StopIteration:
             return
-
-        i = 0
-        for (i, (brecord, _)) in enumerate(buff):
-            if get_time(brecord) > get_time(arecord):
-                break
-        buff.insert(i, (arecord, itera))
+        sort_key = (get_time(arecord), arecord.job, arecord.pid)
+        heappush(q, (sort_key, arecord, itera))
 
     for fname in fnames:
         itera = make_iterator(fname)
-        add_record(itera)
+        for w in range(window_size):
+            add_record(itera)
 
-    while buff:
-        record, itera = buff.pop(0)
-
+    while q:
+        sort_key, record, itera = heappop(q)
+        # fetch another recrod
         add_record(itera)
         record.process(task_dict)
 
@@ -180,38 +223,40 @@ class SchedRecord(object):
 
 class ParamRecord(SchedRecord):
     FIELDS = [('wcet', c_uint32),  ('period', c_uint32),
-              ('phase', c_uint32), ('partition', c_uint8)]
+              ('phase', c_uint32), ('partition', c_uint8),
+              ('class', c_uint8)]
 
     def process(self, task_dict):
         params = TaskParams(self.wcet, self.period, self.partition)
         task_dict[self.pid].params = params
 
 class ReleaseRecord(SchedRecord):
-    FIELDS = [('when', c_uint64), ('release', c_uint64)]
+    # 'when' is actually 'release' in sched_trace
+    FIELDS = [('when', c_uint64), ('deadline', c_uint64)]
 
     def process(self, task_dict):
         data = task_dict[self.pid]
         data.jobs += 1
         if data.params:
-            data.misses.start_time(self, self.when + data.params.period)
+            data.misses.start_time(self, self.deadline)
 
 class CompletionRecord(SchedRecord):
     FIELDS = [('when', c_uint64)]
 
     def process(self, task_dict):
-        task_dict[self.pid].misses.store_time(self)
+        task_dict[self.pid].misses.end_time(self, self.when)
 
 class BlockRecord(SchedRecord):
     FIELDS = [('when', c_uint64)]
 
     def process(self, task_dict):
-        task_dict[self.pid].blocks.start_time(self)
+        task_dict[self.pid].blocks.start_time(self, self.when)
 
 class ResumeRecord(SchedRecord):
     FIELDS = [('when', c_uint64)]
 
     def process(self, task_dict):
-        task_dict[self.pid].blocks.store_time(self)
+        task_dict[self.pid].blocks.end_time(self, self.when)
 
 # Map records to sched_trace ids (see include/litmus/sched_trace.h
 register_record(2, ParamRecord)
@@ -226,7 +271,9 @@ def create_task_dict(data_dir, work_dir = None):
     output_file = "%s/out-st" % work_dir
 
     task_dict = defaultdict(lambda :
-                            TaskData(None, 1, TimeTracker(), TimeTracker()))
+                            TaskData(None, 1,
+                                TimeTracker(is_valid_duration = lambda x: x > 0),
+                                TimeTracker(capper = lambda x: max(x, 0))))
 
     bin_names = [f for f in os.listdir(data_dir) if re.match(bin_files, f)]
     if not len(bin_names):
@@ -264,7 +311,7 @@ def extract_sched_data(result, data_dir, work_dir):
 
         miss = tdata.misses
 
-        record_loss = float(miss.disjoints)/(miss.matches + miss.disjoints)
+        record_loss = float(miss.disjoints())/(miss.matches + miss.disjoints())
         stat_data["record-loss"].append(record_loss)
 
         if record_loss > conf.MAX_RECORD_LOSS:
@@ -276,15 +323,15 @@ def extract_sched_data(result, data_dir, work_dir):
 
         stat_data["miss-ratio" ].append(miss_ratio)
 
-        stat_data["max-tard"].append(miss.max / tdata.params.period)
-        stat_data["avg-tard"].append(avg_tard / tdata.params.period)
+        stat_data["tard-max"].append(float(miss.max) / tdata.params.period)
+        stat_data["tard-avg"].append(avg_tard / tdata.params.period)
 
-        stat_data["avg-block"].append(tdata.blocks.avg / NSEC_PER_MSEC)
-        stat_data["max-block"].append(tdata.blocks.max / NSEC_PER_MSEC)
+        stat_data["block-avg"].append(tdata.blocks.avg / NSEC_PER_MSEC)
+        stat_data["block-max"].append(tdata.blocks.max / NSEC_PER_MSEC)
 
     # Summarize value groups
     for name, data in stat_data.iteritems():
-        if not data or not sum(data):
+        if not data:
             log_once(SKIP_MSG, SKIP_MSG % name)
             continue
         result[name] = Measurement(str(name)).from_array(data)
