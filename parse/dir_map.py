@@ -60,13 +60,25 @@ class DirMap(object):
         return not len(self.root.children)
 
     def write(self, out_dir):
+        def isnum(x):
+            try:
+                v = float(x)
+            except ValueError:
+                return False
+            return True
         def write2(path, node):
             out_path = "/".join(path)
             if node.values:
                 # Leaf
                 with open("/".join(path), "w") as f:
+                    # sort by the first value in the record
+                    if isnum(node.values[0][0]):
+                        # numeric sort
+                        node.values.sort(key=lambda x: float(x[0]))
+                    else:
+                        # lexical sort
+                        node.values.sort(key=lambda x: x[0])
                     arr = [",".join([str(b) for b in n]) for n in node.values]
-                    arr = sorted(arr, key=lambda x: x[0])
                     f.write("\n".join(arr) + "\n")
             elif not os.path.isdir(out_path):
                 os.mkdir(out_path)
