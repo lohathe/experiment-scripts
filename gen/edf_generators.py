@@ -1,14 +1,17 @@
 import generator as gen
 import random
 import schedcat.model.tasks as tasks
+import csv
 from fractions import Fraction
+from decimal import Decimal
+from config.config import FILES
 
 TP_TBASE = """#for $t in $task_set
 {} $t.cost $t.period
 #end for"""
 TP_GLOB_TASK = TP_TBASE.format("")
 TP_PART_TASK = TP_TBASE.format("-p $t.cluster")
-TP_QP_TASK = TP_TBASE.format("-p $t.cluster -S $t.set")
+TP_QP_TASK = TP_TBASE.format("-p $t.cpu -S $t.set")
 
 class EdfGenerator(gen.Generator):
     '''Creates sporadic task sets with the most common Litmus options.'''
@@ -92,28 +95,41 @@ class GedfGenerator(EdfGenerator):
                                             [], params)
 
 ########## QPS offline functions ##########
+def utilization(t):
+    return Fraction(t.cost, t.period)
 
-class QPTask(tasks.SporadicTask):
-    def __init__(self, id=None, exec_cost, period, deadline=None, cpu=None, exec_set=0, is_master=False, client_cpu=None):
-        super(QPTask, self).__init__(exec_cost, period, deadline, id)
-        self.cpu = cpu
-        self.exec_set = exec_set
-        self.is_master = is_master
-        self.client_cpu = client_cpu
-    
-    def utilization(self):
-        return Fraction(self.cost, self.period)
+def taskToList(t):
+    return [t.cpu, t.set, t.client_cpu, t.cost, t.period]
+
+#class QPTask(tasks.SporadicTask):
+#    
+#    def __init__(self, id=None, exec_cost=None, period=None, deadline=None, cpu=None, exec_set=0, is_master=False, client_cpu=None):
+#        super(QPTask, self).__init__(exec_cost, period, deadline, id)
+#        self.cpu = cpu
+#        self.exec_set = exec_set
+#        self.is_master = is_master
+#        self.client_cpu = client_cpu
+#    
+#    def utilization(self):
+#        return Fraction(self.cost, self.period)
+#    
+#    def toList(self):
+#        return [self.cpu, self.exec_set, self.client_cpu, self.exec_cost, self.period]
     
 class ExecutionSet:
+    
     def __init__(self, cpu=None, exec_set=0, utilization=Fraction()):
         self.cpu = cpu
-        self.exec_set = exec_set
+        self.set = exec_set
         self.utilization = utilization
+    
+    def toList(self):
+        return [self.cpu, self.set, self.utilization.numerator, self.utilization.denominator]
     
 class QuasiPartitionedGenerator(EdfGenerator):
     def __init__(self, scheduler, templates, options, params):
-        super(PartitionedGenerator, self).__init__(scheduler,
-                                                   templates + [TP_PART_TASK], 
+        super(QuasiPartitionedGenerator, self).__init__(scheduler,
+                                                   templates + [TP_QP_TASK], 
                                                    options, 
                                                    params)
 
@@ -123,7 +139,7 @@ class QuasiPartitionedGenerator(EdfGenerator):
         sets = [empty_bin() for _ in xrange(0, bins)]
         sums = [Fraction() for _ in xrange(0, bins)]
         
-        items.sort(key=lambda x:x.utilization(), reverse=True)
+        items.sort(key=weight, reverse=True)
         
         for x in items:
             c = weight(x)
@@ -133,7 +149,13 @@ class QuasiPartitionedGenerator(EdfGenerator):
                     sums[i] += c
                     break
             else:
-                pass #insert here the overpack code
+                #overpacking code
+                candidates = [Fraction(1,1) - s for s in sums]
+                i = candidates.index(max(candidates))
+                sets[i] += [x]
+                sums[i] += c
+                print 'Overpacking bin {0}'.format(i) #insert here the overpack code
+                
         return sets
     
     @staticmethod
@@ -141,10 +163,10 @@ class QuasiPartitionedGenerator(EdfGenerator):
         return item > Fraction(1,1)
     
     @staticmethod
-    def binsSum(bins):
-        sums = [Fraction() for _ in xrange(0, bins)]
-        for i in xrange(0, bins):
-            sums[i] = sum([x.utilization() for x in bins[i]])
+    def binsSum(bins, elements):
+        sums = [Fraction() for _ in xrange(0, elements)]
+        for i in xrange(0, elements):
+            sums[i] = sum([utilization(x) for x in bins[i]])
         return sums
     
     @staticmethod
@@ -167,50 +189,57 @@ class QuasiPartitionedGenerator(EdfGenerator):
         tmp_util = Fraction()
         
         for t in qp_bin:
+            
             if tmp_util < split_util:
                 t.set = 0
             else:
                 t.set = 1
+                
+            tmp_util += utilization(t)
+            
         return qp_bin
     
     @staticmethod
     def determineExecutionSet(qp_bin, qp_sum, cpu):
         
-        if qp_sum < Fraction(1,1):
-            raise Exception('Invalid overpacked set')
-        
-        surplus = Fraction(qp_sum.numerator - qp_sum.denumerator, qp_sum.denumerator)
-        a_util = sum([x.utilization() for x in qp_bin if x.set == 0]) - surplus
-        b_util = Fraction(1,1) - a_util - surplus
-        a_set = ExecutionSet(cpu, 0, a_util)
-        b_set = ExecutionSet(cpu, 1, b_util)
-        
+        if qp_sum > Fraction(1,1):
+            surplus = Fraction(qp_sum.numerator - qp_sum.denominator, qp_sum.denominator)
+            a_util = sum([utilization(x) for x in qp_bin if x.set == 0]) - surplus
+            b_util = Fraction(1,1) - a_util - surplus
+            a_set = ExecutionSet(cpu, 0, a_util)
+            b_set = ExecutionSet(cpu, 1, b_util)
+        else:
+            a_set = ExecutionSet(cpu, 0, Fraction(1,1))
+            b_set = ExecutionSet(cpu, 1, Fraction(0,1))
         return [a_set, b_set]
     
     def _customize(self, taskset, exp_params):
         
         cpus  = exp_params['cpus']
+        #cpus = 3
+        #taskset = [tasks.SporadicTask(3,4), tasks.SporadicTask(3,4), tasks.SporadicTask(3,4), tasks.SporadicTask(3,4)]
         
         t_id = 0
-        qp_taskset = list()
         sys_util = Fraction()
         
         for t in taskset:
             t.id = t_id
-            qp_taskset.append(QPTask(t_id, t.cost, t.period, t.deadline))
-            sys_util += Fraction(t.cost, t.period)
-            
+            t.cpu = None
+            t.set = 0
+            t.is_master = False
+            sys_util += utilization(t)
+            t_id += 1
         
+        print 'System utilization: {0}'.format(Decimal(sys_util.numerator) / Decimal(sys_util.denominator))
         
-        bins = QuasiPartitionedGenerator.decreasing_first_fit(qp_taskset, 
+        bins = QuasiPartitionedGenerator.decreasing_first_fit(taskset, 
                                                    cpus, 
                                                    Fraction(1,1), 
-                                                   lambda x: x.utilization())
+                                                   lambda x: utilization(x))
         
-        sums = QuasiPartitionedGenerator.binsSum(bins)
+        sums = QuasiPartitionedGenerator.binsSum(bins, len(bins))
         
         masters = list()
-        tasks = list()
         exec_sets = list()
         
         j = 0 #processor allocation index 
@@ -218,41 +247,57 @@ class QuasiPartitionedGenerator(EdfGenerator):
             
             qp_bins = list()
             
-            for i in xrange(0, bins):
+            for i in xrange(0, len(bins)):
                 if QuasiPartitionedGenerator.overpacked(sums[i]):
                     
-                    surplus = QPTask(id=-1, 
-                                     exec_cost=sums[i].numerator - sums[i].denominator, 
-                                     period=sums[i].denominator, 
-                                     deadline=sums[i].denominator, 
-                                     is_master=True,
-                                     client_cpu=j)
+                    surplus = tasks.SporadicTask(id=t_id, 
+                                                 exec_cost=sums[i].numerator - sums[i].denominator, 
+                                                 period=sums[i].denominator, 
+                                                 deadline=sums[i].denominator) 
+                    surplus.is_master = True
+                    surplus.set = 0
+                    surplus.client_cpu = j
                     
                     qp_bins.append(surplus)
                     masters.append(surplus) #collection of all generated master
                     
                     tmp_bin = QuasiPartitionedGenerator.bipartition(QuasiPartitionedGenerator.allocate(bins[i], j), sums[i])
                     exec_sets += QuasiPartitionedGenerator.determineExecutionSet(tmp_bin, sums[i], j)
-                    tasks += tmp_bin
                     
+                    t_id += 1
                     j += 1
-                else:
+                    
+            for i in xrange(0, len(bins)):
+                if not QuasiPartitionedGenerator.overpacked(sums[i]):
                     qp_bins = qp_bins + bins[i]
             
             bins = QuasiPartitionedGenerator.decreasing_first_fit(qp_bins, 
                                            cpus - j,
                                            Fraction(1,1), 
-                                           lambda x: x.utilization())
+                                           lambda x: utilization(x))
 
-            sums = QuasiPartitionedGenerator.binsSum(bins)
+            sums = QuasiPartitionedGenerator.binsSum(bins, len(bins))
         
-        for b in bins:
-            tmp_bin = QuasiPartitionedGenerator.allocate(b, j)
-            tasks += tmp_bin
+        for i in xrange(0, len(bins)):
+            tmp_bin = QuasiPartitionedGenerator.allocate(bins[i], j)
+            exec_sets += QuasiPartitionedGenerator.determineExecutionSet(tmp_bin, sums[i], j)
             j += 1
         
-        # masters and tasks colelctions can be written to file
-        
+        # masters, tasks and exec_sets are now completed and can be written to file
+        masters_file = self.out_dir + "/" + FILES['masters_file']
+        with open(masters_file, 'wa') as f:
+            csvwriter = csv.writer(f, delimiter=' ')
+            for m in masters:
+                if m.is_master == False:
+                    raise Exception("Not master detected")
+                csvwriter.writerow(taskToList(m))
             
+        sets_file = self.out_dir + "/" + FILES['sets_file']
+        with open(sets_file, 'wa') as f:
+            csvwriter = csv.writer(f, delimiter=' ')
+            for s in exec_sets:
+                csvwriter.writerow(s.toList())
         
-        
+class QPSGenerator(QuasiPartitionedGenerator):
+    def __init__(self, params={}):
+        super(QPSGenerator, self).__init__("QPS", [], [], params)

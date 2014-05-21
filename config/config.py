@@ -21,7 +21,9 @@ FILES = {'params_file' : 'params.py',
          'ft_matches'  : r'(ft.*\.bin$)|(.*\.ft)',
          'linux_data'  : 'trace.dat',
          'sched_data'  : 'st-{}.bin',
-         'log_data'    : 'trace.slog'}
+         'log_data'    : 'trace.slog',
+         'masters_file': 'masters.csv',
+         'sets_file'   : 'sets.csv'}
 
 '''Default parameter names in params.py.'''
 PARAMS = {'sched'   : 'scheduler',       # Scheduler used by run_exps
@@ -43,7 +45,7 @@ DEFAULTS = {'duration'    : 10,
             'out-run'     : 'run-data',
             'out-parse'   : 'parse-data',
             'out-plot'    : 'plot-data',
-            'cycles'      : ft_freq() or 2000}
+            'cycles'      : '2300'} #ft_freq() or 2000}
 
 
 '''Default sched_trace events (this is all of them).'''
