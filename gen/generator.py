@@ -6,7 +6,7 @@ import shutil as sh
 
 from Cheetah.Template import Template
 from common import get_config_option,num_cpus,recordtype
-from config.config import FILES,PARAMS
+from config.config import FILES,PARAMS,DEFAULTS
 from gen.dp import DesignPointGenerator
 from parse.col_map import ColMapBuilder
 
@@ -80,7 +80,11 @@ class Generator(object):
         except:
             rm_config  = False
         release_master = list(set([False, bool(rm_config)]))
-
+        
+        if 'durations' in params:
+            durations = min(map(int, params['durations']))
+        else:
+            durations = DEFAULTS[PARAMS['dur']]
 
         return [GenOption('tasks', int, range(cpus, 5*cpus, cpus),
                               'Number of tasks per experiment.'),
@@ -90,7 +94,7 @@ class Generator(object):
                           'Number of clusters on target system.'),
                 GenOption('release_master', [True,False], release_master,
                           'Redirect release interrupts to a single CPU.'),
-                GenOption('duration', float, [30], 'Experiment duration.')]
+                GenOption('duration', float, [durations], 'Experiment duration.')]
 
     @staticmethod
     def _dist_option(name, default, distribution, help):

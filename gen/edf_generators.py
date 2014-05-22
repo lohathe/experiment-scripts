@@ -39,7 +39,7 @@ class EdfGenerator(gen.Generator):
                                   exp_params['utils'],
                                   gen.NAMED_UTILIZATIONS)
 
-        ts = self._create_taskset(exp_params, pdist, udist)
+        ts = self._create_taskset(exp_params, pdist, udist, exp_params['cpus'])
 
         self._customize(ts, exp_params)
 
@@ -216,8 +216,13 @@ class QuasiPartitionedGenerator(EdfGenerator):
     def _customize(self, taskset, exp_params):
         
         cpus  = exp_params['cpus']
-        #cpus = 3
-        #taskset = [tasks.SporadicTask(3,4), tasks.SporadicTask(3,4), tasks.SporadicTask(3,4), tasks.SporadicTask(3,4)]
+        
+        # EXAMPLE
+        # cpus = 3
+        # taskset = [tasks.SporadicTask(3,4), 
+        #            tasks.SporadicTask(3,4), 
+        #            tasks.SporadicTask(3,4), 
+        #            tasks.SporadicTask(3,4)]
         
         t_id = 0
         sys_util = Fraction()

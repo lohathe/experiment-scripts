@@ -23,7 +23,7 @@ class Experiment(object):
     INTERRUPTED_DIR = ".interrupted"
 
     def __init__(self, name, scheduler, working_dir, finished_dir,
-                 proc_entries, executables, tracer_types):
+                 proc_entries, executables, tracer_types, pre_executables):
         '''Run an experiment, optionally wrapped in tracing.'''
         self.name = name
         self.scheduler = scheduler
@@ -34,6 +34,7 @@ class Experiment(object):
         self.exec_out = None
         self.exec_err = None
         self.tracer_types = tracer_types
+        self.pre_executables = pre_executables
 
         self.regular_tracers = []
         self.exact_tracers = []
@@ -151,7 +152,16 @@ class Experiment(object):
             if now_ready != num_ready:
                 wait_start = time.time()
                 num_ready  = now_ready
-
+    
+    def __run_pre_executables(self):
+        self.log("Running %d pre-exec" % len(self.pre_executables))
+        for e in self.pre_executables:
+            try:
+                e.execute()
+                time.sleep(1)
+            except:
+                raise Exception("Executable failed to start: %s" % e)
+                    
     def __run_tasks(self):
         self.log("Starting %d tasks" % len(self.executables))
 
@@ -248,13 +258,16 @@ class Experiment(object):
         print("[Exp %s]: %s" % (self.name, msg))
 
     def run_exp(self):
+        
         self.__to_linux()
 
         succ = False
         exception = None
         try:
             self.__setup()
-
+            #Here the kernel has been selected
+            #so we can execute pre execution operations
+            self.__run_pre_executables()
             try:
                 self.__run_tasks()
                 self.log("Saving results in %s" % self.finished_dir)

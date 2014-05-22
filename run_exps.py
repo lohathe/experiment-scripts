@@ -10,8 +10,9 @@ import shutil
 import sys
 import run.crontab as cron
 import run.tracer as trace
+import csv
 
-from config.config import PARAMS,DEFAULTS,FILES
+from config.config import PARAMS,DEFAULTS,FILES,BINS
 from collections import namedtuple
 from optparse import OptionParser,OptionGroup
 from parse.enum import Enum
@@ -143,6 +144,34 @@ def fix_paths(schedule, exp_dir, sched_file):
 
         schedule['task'][idx] = (task, args)
 
+def load_sets(fname):
+    
+    args = []
+    executables = []
+    
+    with open(fname, 'r') as f:
+        csvreader = csv.reader(f, delimiter=' ')
+        for row in csvreader:
+            args.append(row)
+    
+    for a in args:
+        executables.append(Executable(BINS['qps_add_set'], a))
+    
+    return executables
+
+def load_masters(fname):
+    args = []
+    executables = []
+    
+    with open(fname, 'r') as f:
+        csvreader = csv.reader(f, delimiter=' ')
+        for row in csvreader:
+            args.append(row)
+    
+    for a in args:
+        executables.append(Executable(BINS['qps_add_master'], a))
+    
+    return executables
 
 def load_schedule(name, fname, duration):
     '''Turn schedule file @fname into ProcEntry's and Executable's which execute
@@ -285,9 +314,15 @@ def run_experiment(data, start_message, ignore, jabber):
     work_dir = "%s/tmp" % dir_name
 
     procs, execs = load_schedule(data.name, data.sched_file, data.params.duration)
-
+    
+    pre_executables = []
+    #Load QPS executables to pass as parameter to Experiment class
+    if data.params.scheduler == 'QPS':
+        pre_executables += load_sets(os.path.join(data.name, FILES['sets_file'])) 
+        pre_executables += load_masters(os.path.join(data.name, FILES['masters_file']))
+    
     exp = Experiment(data.name, data.params.scheduler, work_dir,
-                     data.out_dir, procs, execs, data.params.tracers)
+                     data.out_dir, procs, execs, data.params.tracers, pre_executables)
 
     exp.log(start_message)
 
