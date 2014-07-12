@@ -318,8 +318,8 @@ def run_experiment(data, start_message, ignore, jabber):
     pre_executables = []
     #Load QPS executables to pass as parameter to Experiment class
     if data.params.scheduler == 'QPS':
-        pre_executables += load_sets(os.path.join(data.name, FILES['sets_file'])) 
-        pre_executables += load_masters(os.path.join(data.name, FILES['masters_file']))
+        pre_executables += load_sets(os.path.join(dir_name, FILES['sets_file'])) 
+        pre_executables += load_masters(os.path.join(dir_name, FILES['masters_file']))
     
     exp = Experiment(data.name, data.params.scheduler, work_dir,
                      data.out_dir, procs, execs, data.params.tracers, pre_executables)

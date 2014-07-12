@@ -41,7 +41,7 @@ def load_file(fname):
         del values['generator']
         return generator, values
     except:
-           raise IOError("Invalid generation file: %s" % fname)
+        raise IOError("Invalid generation file: %s" % fname)
 
 def print_descriptions(described):
     for generator in described.split(','):

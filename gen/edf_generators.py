@@ -115,7 +115,7 @@ def taskToList(t):
 #    
 #    def toList(self):
 #        return [self.cpu, self.exec_set, self.client_cpu, self.exec_cost, self.period]
-    
+
 class ExecutionSet:
     
     def __init__(self, cpu=None, exec_set=0, utilization=Fraction()):
@@ -287,7 +287,7 @@ class QuasiPartitionedGenerator(EdfGenerator):
             tmp_bin = QuasiPartitionedGenerator.allocate(bins[i], j)
             exec_sets += QuasiPartitionedGenerator.determineExecutionSet(tmp_bin, sums[i], j)
             j += 1
-        
+                    
         # masters, tasks and exec_sets are now completed and can be written to file
         masters_file = self.out_dir + "/" + FILES['masters_file']
         with open(masters_file, 'wa') as f:
