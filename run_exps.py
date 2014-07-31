@@ -184,7 +184,7 @@ class Node:
         self.l_c = l_c
         self.r_s = r_s
 
-def generate_params_preorder(node):
+def generate_params_preorder(node):    
     if node is None:
         return [[-1, 0, 0, -1]]
     tmp_list = [[node.id, node.rate_num, node.rate_den, node.level]]
@@ -219,14 +219,16 @@ def load_nodes(fname):
     executables = []
     
     if not(os.path.isfile(fname)):
-        raise Exception("Tree file not found!")
+        raise Exception("Tree file not found")
     
     with open(fname, 'r') as f:    
         data = json.load(f)
         root = rebuild_tree(data);
     
-    if root is not None:
-        args = generate_params_preorder(root)
+    if root is None:
+        raise Exception("Parsing failed")
+    
+    args = generate_params_preorder(root)
     
     for a in args:
         executables.append(Executable(BINS['run_add_node'], a))
@@ -305,7 +307,7 @@ def run_script(script_params, exp, exp_dir, out_dir):
     if type(script_params) != type([]):
         script_params = [script_params]
 
-    exp.log("Running %s" % script_params.join(" "))
+    exp.log("Running %s" % " ".join(script_params))
 
     script_name = script_params.pop(0)
     script = com.get_executable(script_name, cwd=exp_dir)

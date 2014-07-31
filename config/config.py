@@ -9,12 +9,14 @@ BINS = {'rtspin'    : get_executable_hint('rtspin', 'liblitmus'),
         'ftsplit'   : get_executable_hint('ft2csv', 'feather-trace-tools'),
         'ftsort'    : get_executable_hint('ftsort', 'feather-trace-tools'),
         'st_trace'  : get_executable_hint('st_trace', 'feather-trace-tools'),
-        'qps_add_master' : get_executable_hint('qps_add_master', 'liblitmus'),
-        'qps_add_set' : get_executable_hint('qps_add_set', 'liblitmus'),
         # Optional, as not everyone uses kernelshark yet
         'trace-cmd' : get_executable_hint('trace-cmd', 'rt-kernelshark', True),
         # Optional, as sched_trace is not a publically supported repository
-        'st_show'   : get_executable_hint('st_show', 'sched_trace', True)}
+        'st_show'   : get_executable_hint('st_show', 'sched_trace', True),
+        #Optional
+        'qps_add_master'    : get_executable_hint('qps_add_master', 'liblitmus', optional=True),
+        'qps_add_set'       : get_executable_hint('qps_add_set', 'liblitmus', optional=True),
+        'run_add_node'      : get_executable_hint('run_add_node', 'liblitmus', optional=True)}
 
 '''Names of data files.'''
 FILES = {'params_file' : 'params.py',

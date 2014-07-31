@@ -158,7 +158,7 @@ class Experiment(object):
         for e in self.pre_executables:
             try:
                 e.execute()
-                time.sleep(0.5)
+                time.sleep(0.3)
             except:
                 raise Exception("Executable failed to start: %s" % e)
                     
