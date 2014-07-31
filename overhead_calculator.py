@@ -31,11 +31,17 @@ def main():
         
         (task, args) = (task_conf[0], task_conf[1])
         real_args = args.split()
+        if '-s' in real_args:
+            index = real_args.index('-s')
+            real_args.pop(index + 1)
+            real_args.pop(index)
         
         C = float(real_args[-2])
+        if round((overhead / C), 3) > 0.999:
+            min_c = max(min_c, C)
         if (C > min_c):
-            s = 1 - round((overhead / C),3)
-            ts.append('-s {0:.3f} {1}\n'.format(s, args))
+            s = 1 - round((overhead / C), 3)
+            ts.append('-s {0:.3f} {1}\n'.format(s, ' '.join(real_args)))
         else:
             print 'Discarded task: {0} {1}'.format(C, real_args[-1])
         #print '-s {0:.3f} {1}'.format(s, args)

@@ -14,7 +14,7 @@ NAMED_PERIODS = {
     'harmonic'            : rv.uniform_choice([25, 50, 100, 200]),
     'uni-short'           : rv.uniform_int( 3,  33),
     'uni-moderate'        : rv.uniform_int(10, 100),
-    'uni-long'            : rv.uniform_int(50, 250),
+    'uni-long'            : rv.uniform_int(25, 200),
 }
 
 NAMED_UTILIZATIONS = {
@@ -85,8 +85,23 @@ class Generator(object):
             durations = min(map(int, params['durations']))
         else:
             durations = DEFAULTS[PARAMS['dur']]
-
-        return [GenOption('tasks', int, range(cpus, 5*cpus, cpus),
+            
+        if 'mutils' in params:
+            max_utils = (map(float, params['mutils']))
+            return [GenOption('mutils', float, max_utils,
+                              'Max utilization.'),
+                GenOption('cpus', int, [cpus],
+                          'Number of processors on target system.'),
+                GenOption('clusters', int, [clusters],
+                          'Number of clusters on target system.'),
+                GenOption('release_master', [True,False], release_master,
+                          'Redirect release interrupts to a single CPU.'),
+                GenOption('duration', float, [durations], 'Experiment duration.')]
+        else:
+            max_utils = [float(cpus)]
+            return [GenOption('mutils', float, max_utils,
+                              'Max utilization.'),
+                GenOption('tasks', int, range(cpus, 5*cpus, cpus),
                               'Number of tasks per experiment.'),
                 GenOption('cpus', int, [cpus],
                           'Number of processors on target system.'),
@@ -119,17 +134,20 @@ class Generator(object):
         tg = tasks.TaskGenerator(period=periods, util=utils)
         ts = []
         tries = 0
-        while len(ts) != params['tasks'] and tries < 100:
-            ts = tg.make_task_set(max_tasks = params['tasks'], max_util=max_util)
-            tries += 1
-        if len(ts) != params['tasks']:
-            print(("Only created task set of size %d < %d for params %s. " +
-                   "Switching to light utilization.") %
-                  (len(ts), params['tasks'], params))
-            print("Switching to light util. This usually means the " +
-                  "utilization distribution is too agressive.")
-            return self._create_taskset(params, periods, NAMED_UTILIZATIONS['uni-light'],
-                                        max_util)
+        if max_util:
+            ts = tg.make_task_set(max_util=max_util, squeeze=True)
+        else:
+            while len(ts) != params['tasks'] and tries < 100:
+                ts = tg.make_task_set(max_tasks = params['tasks'], max_util=max_util)
+                tries += 1
+            if len(ts) != params['tasks']:
+                print(("Only created task set of size %d < %d for params %s. " +
+                       "Switching to light utilization.") %
+                      (len(ts), params['tasks'], params))
+                print("Switching to light util. This usually means the " +
+                      "utilization distribution is too agressive.")
+                return self._create_taskset(params, periods, NAMED_UTILIZATIONS['uni-light'],
+                                            max_util)
         return ts
 
     def _write_schedule(self, params):

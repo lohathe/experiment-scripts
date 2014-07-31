@@ -2,6 +2,8 @@ import generator as gen
 import random
 import schedcat.model.tasks as tasks
 import csv
+import json
+import math
 from fractions import Fraction
 from decimal import Decimal
 from config.config import FILES
@@ -12,6 +14,7 @@ TP_TBASE = """#for $t in $task_set
 TP_GLOB_TASK = TP_TBASE.format("")
 TP_PART_TASK = TP_TBASE.format("-p $t.cluster")
 TP_QP_TASK = TP_TBASE.format("-p $t.cpu -S $t.set")
+TP_RUN_TASK = TP_TBASE.format("-S $t.server")
 
 class EdfGenerator(gen.Generator):
     '''Creates sporadic task sets with the most common Litmus options.'''
@@ -38,8 +41,8 @@ class EdfGenerator(gen.Generator):
         udist = self._create_dist('utilization',
                                   exp_params['utils'],
                                   gen.NAMED_UTILIZATIONS)
-
-        ts = self._create_taskset(exp_params, pdist, udist, exp_params['cpus'])
+        
+        ts = self._create_taskset(exp_params, pdist, udist, exp_params['mutils'])
 
         self._customize(ts, exp_params)
 
@@ -306,3 +309,267 @@ class QuasiPartitionedGenerator(EdfGenerator):
 class QPSGenerator(QuasiPartitionedGenerator):
     def __init__(self, params={}):
         super(QPSGenerator, self).__init__("QPS", [], [], params)
+
+#RUN generator
+
+def ignore(_):
+    pass
+
+class FixedRateTask(tasks.SporadicTask):
+    
+    def __init__(self, exec_cost, period, deadline=None, id=None, server=None, level=-1):
+        super(FixedRateTask,self).__init__(exec_cost, period, deadline, id)
+        self.server = server
+        self.level = level
+        self.children = []
+        self.parent = None
+        
+    def dual_utilization(self):
+        return Decimal(1) - self.utilization()
+    
+    def dual_util_frac(self):
+        return Fraction(self.period - self.cost, self.period)
+    
+    def utilization(self):
+        return Decimal(self.cost) / Decimal(self.period)
+    
+    def util_frac(self):
+        return Fraction(self.cost, self.period)
+    
+    def get_children(self):
+        return self.children
+    
+    @staticmethod
+    def _aggregate(task_list, server, level):
+        
+        tot_util = Fraction()
+        for t in task_list:
+            tot_util += t.util_frac()
+        new_task = FixedRateTask(tot_util.numerator, 
+                                 tot_util.denominator, 
+                                 tot_util.denominator, 
+                                 server, 
+                                 None,
+                                 level)
+        
+        for t in task_list:
+            t.parent = new_task
+            t.server = server
+            new_task.children.append(t)
+        return new_task
+    
+    @staticmethod
+    def serialize(task):
+        obj = {
+            'id': task.id,
+            'cost': task.cost,
+            'period': task.period,
+            'level' : task.level,
+            'children': []
+        }
+        if (task.level > 0):
+            for ch in task.get_children():
+                obj['children'].append(FixedRateTask.serialize(ch))
+            
+        return obj
+
+class RUNGenerator(EdfGenerator):
+    def __init__(self, params={}):
+        super(RUNGenerator, self).__init__("RUN",
+            [TP_RUN_TASK], [], params)
+        self.server_count = 0
+    
+    def _customize(self, taskset, exp_params):
+        if 'max_util' in exp_params:
+            print 'sched=RUN cpus={0} max_util={1} tasks={2}'.format(unicode(exp_params['cpus']), unicode(exp_params['max_util']), unicode(len(taskset)))
+        else:
+            print 'sched=RUN cpus={0} max_util={1} tasks={2}'.format(unicode(exp_params['cpus']), unicode('0.0'), unicode(len(taskset)))
+        cpus  = exp_params['cpus']
+        self.server_count = 0
+        slack_dist = False
+        if 'slack_dist' in exp_params:
+            slack_dist = True if (exp_params['slack_dist'] == 'tasks') else False
+        data = self._reductor(taskset, cpus, slack_dist)
+        tree_file = self.out_dir + "/tree.json"
+        with open(tree_file, 'wa') as f:
+            json.dump(data, f, indent=4)
+            
+    def _reductor(self, taskset, cpus, slack_dist):
+        
+        #First create fixed-rates        
+        n_tasks = len(taskset)
+        #On heavy task case #tasks may be less than #cpus
+        if (n_tasks < cpus):
+            print 'attention: #cpus has changed from {0} to {1}'.format(unicode(cpus),unicode(n_tasks))
+            cpus = n_tasks
+            
+        t_id = 0
+        fr_taskset = []
+        tot_util = Fraction()
+        
+        for t in taskset:
+            t.id = t_id
+            fr_taskset.append(FixedRateTask(t.cost, t.period, t.deadline, t_id))
+            t_id += 1
+            tot_util += Fraction(t.cost, t.period)
+        #Second distribuites unused cpu capacity (slack-pack)
+        print 'Total utilization: {0}'.format(Decimal(tot_util.numerator)/Decimal(tot_util.denominator))
+        
+        unused_capacity = Fraction(cpus,1) - tot_util
+        if (unused_capacity < Fraction()):
+            raise Exception('Unfeasible Taskset')
+        
+        if (slack_dist):
+            fr_taskset.sort(key=lambda x: x.util_frac(), reverse=True)
+            self._distribuite_slack(fr_taskset, unused_capacity)
+            new_taskset = self._pack(fr_taskset, cpus, 0)
+            self._dual(new_taskset)
+        else:
+            new_taskset = self._pack(fr_taskset, cpus, 0)
+            new_taskset.sort(key=lambda x: x.utilization(), reverse=True)
+            self._distribuite_slack(new_taskset, unused_capacity)
+            self._dual(new_taskset)
+        
+        unit_server = self._reduce(new_taskset, 1)
+        
+        if (len(unit_server) != 1):
+            raise Exception('Not a Unit-Server')
+        
+        if (unit_server[0].util_frac() != Fraction() and not(unit_server[0].util_frac().numerator == unit_server[0].util_frac().denominator)):
+            raise Exception('Not a Unit-Server')
+        
+        if (unit_server[0].util_frac().numerator == 1):
+            print 'Root level: {0}'.format(unicode(unit_server[0].level - 1))
+        else: 
+            print 'Root level: {0}'.format(unicode(unit_server[0].level))
+            
+        for t in taskset:
+            for fr_t in fr_taskset:
+                if (fr_t.id == t.id):
+                    t.server = fr_t.server
+                    
+        return FixedRateTask.serialize(unit_server[0])
+    
+    def _slack_dist(self, ts, slack):
+        
+        n_tasks = len(ts)
+        val_a = ts[0].dual_utilization()
+        val_b = slack / Decimal(n_tasks)
+        
+        unused_capacity = slack
+        
+        task_extra_util = min(val_a, val_b)
+        for t in ts:
+            if (t.dual_utilization() <= task_extra_util):
+                unused_capacity -= t.dual_utilization()
+                t.cost = t.period
+            else:
+                tmp_util = t.utilization()
+                t.cost += int(task_extra_util * Decimal(t.period))
+                unused_capacity -= (t.utilization() - tmp_util)
+        
+        tries = 10
+        while (unused_capacity > Decimal(0)) and (tries > 0):
+            for t in ts:
+                tmp_value = unused_capacity * Decimal(t.period)
+                if (t.dual_utilization() >= unused_capacity) and tmp_value == int(tmp_value):
+                    t.cost += int(tmp_value)
+                    unused_capacity = Decimal(0)
+                    break
+            if (unused_capacity > Decimal(0)):
+                for t in ts:
+                    if (t.dual_utilization() <= unused_capacity):
+                        unused_capacity -= t.dual_utilization()
+                        t.cost = t.period
+            tries -= 1
+            
+        if (unused_capacity > Decimal(0)):
+            raise Exception('Still capacity unused: ' + str(unused_capacity))
+    
+    def _distribuite_slack(self, ts, slack):
+        ts.sort(key=lambda x: x.util_frac(), reverse=True)
+        i = 0
+        unused_capacity = slack        
+        while (unused_capacity > Fraction()) and (i < len(ts)):
+            t = ts[i]
+            if (t.dual_util_frac() <= unused_capacity):
+                unused_capacity -= t.dual_util_frac()
+                t.cost = t.period
+            else:
+                tmp_frac = t.util_frac() + unused_capacity
+                t.cost = tmp_frac.numerator
+                t.period = tmp_frac.denominator
+                unused_capacity = Fraction()
+            i+=1            
+        if (unused_capacity > Fraction()):
+            raise Exception('Still capacity unused: ' + str(unused_capacity))
+        
+    def _dual(self, taskset):
+        for t in taskset:
+            t.cost = t.period - t.cost
+        
+    def _pack(self, taskset, cpus, level):
+        self.misfit = 0
+        n_bins = cpus
+        
+        taskset.sort(key=lambda x: x.util_frac(), reverse=True)
+        
+        bins = RUNGenerator.worst_fit(taskset, 
+                                      n_bins, 
+                                      Fraction(1,1), 
+                                      lambda x: x.util_frac(), 
+                                      self._misfit)
+        while (self.misfit > 0):
+            #n_bins += math.ceil(self.misfit)
+            n_bins += 1 #self.misfit
+            self.misfit = 0
+            bins = RUNGenerator.worst_fit(taskset, 
+                                          n_bins, 
+                                          Fraction(1,1), 
+                                          lambda x: x.util_frac(),
+                                          self._misfit)    
+        servers = []
+        for item in bins:
+            tmp_server = FixedRateTask._aggregate(item, self.server_count, level)
+            servers.append(tmp_server)
+            self.server_count += 1
+        
+        self.misfit = 0
+        return servers
+        
+    def _misfit(self, x):
+        #self.misfit += x.dual_utilization()
+        self.misfit += 1
+           
+    def _reduce(self, taskset, level):
+        utilization = Fraction()
+        for t in taskset:
+            utilization += t.util_frac()
+        
+        new_taskset = self._pack(taskset, 
+                                 int(math.ceil(utilization)), 
+                                 level)
+        self._dual(new_taskset)
+        
+        if (utilization <= Fraction(1,1)):
+            return new_taskset
+        else:
+            return self._reduce(new_taskset, level + 1)
+    
+    @staticmethod
+    def worst_fit(items, bins, capacity=Fraction(1,1), weight=id, misfit=ignore, empty_bin=list):
+        sets = [empty_bin() for _ in xrange(0, bins)]
+        sums = [Fraction() for _ in xrange(0, bins)]
+        for x in items:
+            c = weight(x)
+            # pick the bin where the item will leave the most space
+            # after placing it, aka the bin with the least sum
+            candidates = [s for s in sums if s + c <= capacity]
+            if candidates:
+                # fits somewhere
+                i = sums.index(min(candidates))
+                sets[i] += [x]
+                sums[i] += c
+            else:
+                misfit(x)
+        return sets

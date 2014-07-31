@@ -25,7 +25,8 @@ FILES = {'params_file' : 'params.py',
          'sched_data'  : 'st-{}.bin',
          'log_data'    : 'trace.slog',
          'masters_file': 'masters.csv',
-         'sets_file'   : 'sets.csv'}
+         'sets_file'   : 'sets.csv',
+         'nodes_file'  : 'tree.json'}
 
 '''Default parameter names in params.py.'''
 PARAMS = {'sched'   : 'scheduler',       # Scheduler used by run_exps
@@ -54,7 +55,7 @@ DEFAULTS = {'duration'    : 10,
 SCHED_EVENTS = range(501, 513)
 
 '''Overhead events.'''
-OVH_BASE_EVENTS  = ['SCHED', 'RELEASE', 'SCHED2', 'TICK', 'CXS', 'LOCK', 'UNLOCK']
+OVH_BASE_EVENTS  = ['SCHED', 'RELEASE', 'SCHED2', 'TICK', 'CXS', 'LOCK', 'UNLOCK', 'TREE']
 OVH_ALL_EVENTS   = ["%s_%s" % (e, t) for (e,t) in
                     itertools.product(OVH_BASE_EVENTS, ["START","END"])]
 OVH_ALL_EVENTS  += ['RELEASE_LATENCY']

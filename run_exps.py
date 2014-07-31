@@ -11,6 +11,7 @@ import sys
 import run.crontab as cron
 import run.tracer as trace
 import csv
+import json
 
 from config.config import PARAMS,DEFAULTS,FILES,BINS
 from collections import namedtuple
@@ -173,6 +174,65 @@ def load_masters(fname):
     
     return executables
 
+class Node:
+    
+    def __init__(self, id, rate_num, rate_den, level, l_c = None, r_s = None):
+        self.id = id
+        self.rate_num = rate_num
+        self.rate_den = rate_den
+        self.level = level
+        self.l_c = l_c
+        self.r_s = r_s
+
+def generate_params_preorder(node):
+    if node is None:
+        return [[-1, 0, 0, -1]]
+    tmp_list = [[node.id, node.rate_num, node.rate_den, node.level]]
+    for v in generate_params_preorder(node.l_c):
+        tmp_list.append(v)
+    for v in generate_params_preorder(node.r_s):
+        tmp_list.append(v)
+    return tmp_list
+
+def parse_node(data):
+    if len(data) < 1:
+        return None
+    first = prev = None
+    for d in data:
+        n = Node(d['id'], d['cost'], d['period'], d['level'])
+        if prev is None:
+            first = n
+        else:
+            prev.r_s = n
+        n.l_c = parse_node(d['children'])
+        prev = n
+    return first
+
+def rebuild_tree(data):
+    return Node(data['id'], data['cost'], data['period'], data['level'], 
+                parse_node(data['children']), None)
+
+def load_nodes(fname):
+    
+    root = None
+    args = None
+    executables = []
+    
+    if not(os.path.isfile(fname)):
+        raise Exception("Tree file not found!")
+    
+    with open(fname, 'r') as f:    
+        data = json.load(f)
+        root = rebuild_tree(data);
+    
+    if root is not None:
+        args = generate_params_preorder(root)
+    
+    for a in args:
+        executables.append(Executable(BINS['run_add_node'], a))
+        
+    return executables
+
 def load_schedule(name, fname, duration):
     '''Turn schedule file @fname into ProcEntry's and Executable's which execute
     for @duration time.'''
@@ -320,7 +380,10 @@ def run_experiment(data, start_message, ignore, jabber):
     if data.params.scheduler == 'QPS':
         pre_executables += load_sets(os.path.join(dir_name, FILES['sets_file'])) 
         pre_executables += load_masters(os.path.join(dir_name, FILES['masters_file']))
-    
+        
+    if data.params.scheduler == 'RUN':
+        pre_executables += load_nodes(os.path.join(dir_name, FILES['nodes_file']))
+        
     exp = Experiment(data.name, data.params.scheduler, work_dir,
                      data.out_dir, procs, execs, data.params.tracers, pre_executables)
 

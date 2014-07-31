@@ -33,13 +33,13 @@ def main():
         (task, args) = (task_conf[0], task_conf[1])
         real_args = args.split()
         
-        index = 0
-        if '-S' in real_args:
-            index = real_args.index('-S') + 2
-            
-        if '-p'in real_args:
-            index = real_args.index('-p') + 2
-            
+        #index = 0
+        #if '-S' in real_args:
+        #    index = real_args.index('-S') + 2
+        #    
+        #if '-p'in real_args:
+        #    index = real_args.index('-p') + 2
+        index = -2    
         ts.append(tasks.SporadicTask(int(real_args[index + 0]), int(real_args[index + 1])))
     
     generator = QPSGenerator()

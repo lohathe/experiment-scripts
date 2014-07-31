@@ -19,7 +19,7 @@ def_cxs = 'overh_cxs.csv'
 def_latency = 'overh_release_latency.csv'
 def_tree = 'overh_tree.csv'
 def_dir = '.'
-def_percentile = 99.0
+def_percentile = 99.9
 
 def parse_args():
     parser = OptionParser("usage: %prog [options]")
