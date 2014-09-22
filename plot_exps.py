@@ -100,7 +100,7 @@ def plot_by_variable(details):
 
     axes.set_ylabel(details.value)
     axes.set_xlabel(details.variable)
-    axes.set_xlim(0, axes.get_xlim()[1])
+    axes.set_xlim(axes.get_xlim()[0], axes.get_xlim()[1])
     axes.set_ylim(0, axes.get_ylim()[1])
 
     plot.savefig(details.out, format=OUT_FORMAT,

@@ -10,9 +10,44 @@ from point import Measurement
 from ctypes import *
 from heapq import *
 
+class EventTraker:
+    def __init__(self, sync_release_time = 0):
+        self.sync_release_time = sync_release_time
+        self.preemptions= {}
+        self.migrations = {}
+        self.switch_to_buffer = []
+        self.delay_buffer_size = 1
+    
+    def add_switch_to(self, record, time):
+        if len(self.switch_to_buffer) == self.delay_buffer_size:
+            to_queue = self.switch_to_buffer.pop(0)     
+            if to_queue[0].job == record.job:
+                self.preemptions[to_queue[0].job] += 1
+                if to_queue[0].cpu != record.cpu:
+                    self.migrations[to_queue[0].job] += 1
+        if not record.job in self.preemptions.keys():
+            self.preemptions[record.job] = 0
+            self.migrations[record.job] = 0
+        self.switch_to_buffer.append((record, time))
+        
+    def get_preemptions(self):
+        sum = 0
+        for job in self.preemptions.keys():
+            sum += self.preemptions[job]
+        return sum
+    
+    def get_migrations(self):
+        sum = 0
+        for job in self.migrations.keys():
+            sum += self.migrations[job]
+        return sum
+    
+    def get_jobs(self):
+        return len(self.preemptions.keys())
+    
 class TimeTracker:
     '''Store stats for durations of time demarcated by sched_trace records.'''
-    def __init__(self, is_valid_duration = lambda x: True, capper = lambda x: x, delay_buffer_size = 1, max_pending = -1):
+    def __init__(self, is_valid_duration = lambda x: x > 0, capper = lambda x: x, delay_buffer_size = 1, max_pending = -1, sync_release_time = 0):
         self.validator = is_valid_duration
         self.capper = capper
         self.avg = self.max = self.num = 0
@@ -29,6 +64,7 @@ class TimeTracker:
         self.end_delay_buffer = []
         self.start_records = {}
         self.end_records = {}
+        self.sync_release_time = sync_release_time
 
     def disjoints(self):
         unmatched = len(self.start_records) + len(self.end_records)
@@ -62,7 +98,7 @@ class TimeTracker:
                 self.num += 1
                 self.avg = (old_avg + dur) / float(self.num)
                 self.all_measurements.append(dur)
-
+                
         # Give up on some jobs if they've been hanging around too long.
         # While not strictly needed, it helps improve performance and
         # it is unlikey to cause too much trouble.
@@ -82,8 +118,8 @@ class TimeTracker:
     def end_time(self, record, time):
         '''End duration of time.'''
         if len(self.end_delay_buffer) == self.delay_buffer_size:
-           to_queue = self.end_delay_buffer.pop(0)
-           self.end_records[to_queue[0].job] = to_queue
+            to_queue = self.end_delay_buffer.pop(0)
+            self.end_records[to_queue[0].job] = to_queue
         self.end_delay_buffer.append((record, time))
         self.process_completed()
 
@@ -97,7 +133,7 @@ class TimeTracker:
 
 # Data stored for each task
 TaskParams = namedtuple('TaskParams',  ['wcet', 'period', 'cpu'])
-TaskData   = recordtype('TaskData',    ['params', 'jobs', 'blocks', 'misses'])
+TaskData   = recordtype('TaskData',    ['params', 'jobs', 'blocks', 'misses', 'preemptions'])
 
 # Map of event ids to corresponding class and format
 record_map = {}
@@ -237,14 +273,15 @@ class ReleaseRecord(SchedRecord):
     def process(self, task_dict):
         data = task_dict[self.pid]
         data.jobs += 1
-        if data.params:
+        if data.params and self.when >= task_dict[self.pid].misses.sync_release_time:
             data.misses.start_time(self, self.deadline)
 
 class CompletionRecord(SchedRecord):
     FIELDS = [('when', c_uint64)]
 
     def process(self, task_dict):
-        task_dict[self.pid].misses.end_time(self, self.when)
+        if self.when >= task_dict[self.pid].misses.sync_release_time:
+            task_dict[self.pid].misses.end_time(self, self.when)
 
 class BlockRecord(SchedRecord):
     FIELDS = [('when', c_uint64)]
@@ -257,13 +294,37 @@ class ResumeRecord(SchedRecord):
 
     def process(self, task_dict):
         task_dict[self.pid].blocks.end_time(self, self.when)
+        
+class SwitchToRecord(SchedRecord):
+    FIELDS = [('when', c_uint64)]
+
+    def process(self, task_dict):
+        if task_dict[self.pid].params and self.when >= task_dict[self.pid].preemptions.sync_release_time:
+            task_dict[self.pid].preemptions.add_switch_to(self, self.when)
+
+class SwitchAwayRecord(SchedRecord):
+    FIELDS = [('when', c_uint64)]
+
+    def process(self, task_dict):
+        pass
+        
+class SysReleaseRecord(SchedRecord):
+    FIELDS = [('when', c_uint64), ('at', c_uint64)]
+
+    def process(self, task_dict):
+        for k in task_dict:
+            task_dict[k].misses.sync_release_time = self.at
+            task_dict[k].preemptions.sync_release_time = self.at
 
 # Map records to sched_trace ids (see include/litmus/sched_trace.h
 register_record(2, ParamRecord)
 register_record(3, ReleaseRecord)
+register_record(5, SwitchToRecord)
+register_record(6, SwitchAwayRecord)
 register_record(7, CompletionRecord)
 register_record(8, BlockRecord)
 register_record(9, ResumeRecord)
+register_record(11, SysReleaseRecord)
 
 def create_task_dict(data_dir, work_dir = None):
     '''Parse sched trace files'''
@@ -273,7 +334,8 @@ def create_task_dict(data_dir, work_dir = None):
     task_dict = defaultdict(lambda :
                             TaskData(None, 1,
                                 TimeTracker(is_valid_duration = lambda x: x > 0),
-                                TimeTracker(capper = lambda x: max(x, 0))))
+                                TimeTracker(capper = lambda x: max(x, 0)),
+                                EventTraker()))
 
     bin_names = [f for f in os.listdir(data_dir) if re.match(bin_files, f)]
     if not len(bin_names):
@@ -310,7 +372,7 @@ def extract_sched_data(result, data_dir, work_dir):
             continue
 
         miss = tdata.misses
-
+        
         record_loss = float(miss.disjoints())/(miss.matches + miss.disjoints())
         stat_data["record-loss"].append(record_loss)
 
@@ -328,6 +390,15 @@ def extract_sched_data(result, data_dir, work_dir):
 
         stat_data["block-avg"].append(tdata.blocks.avg / NSEC_PER_MSEC)
         stat_data["block-max"].append(tdata.blocks.max / NSEC_PER_MSEC)
+        
+        preemptions = tdata.preemptions.get_preemptions()
+        migrations = tdata.preemptions.get_migrations()
+        jobs = tdata.preemptions.get_jobs()
+        stat_data["jobs"].append(jobs)
+        stat_data["preemptions"].append(preemptions)
+        stat_data["migrations"].append(migrations)
+        stat_data["preemptions-per-job"].append(float(preemptions)/jobs)
+        stat_data["migrations-per-job"].append(float(migrations)/jobs) 
 
     # Summarize value groups
     for name, data in stat_data.iteritems():

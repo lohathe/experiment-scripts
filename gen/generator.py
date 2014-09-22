@@ -73,7 +73,7 @@ class Generator(object):
             clusters = min(map(int, params['clusters']))
         else:
             # default to partitioned
-            clusters = num_cpus()
+            clusters = cpus#num_cpus()
 
         try:
             rm_config  = get_config_option("RELEASE_MASTER") and True
@@ -135,7 +135,7 @@ class Generator(object):
         ts = []
         tries = 0
         if max_util:
-            ts = tg.make_task_set(max_util=max_util, squeeze=True)
+            ts = tg.make_task_set(max_util=max_util, squeeze=False)
         else:
             while len(ts) != params['tasks'] and tries < 100:
                 ts = tg.make_task_set(max_tasks = params['tasks'], max_util=max_util)

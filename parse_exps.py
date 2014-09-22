@@ -98,7 +98,7 @@ def get_exp_params(data_dir, cm_builder):
         for key, value in params.iteritems():
             cm_builder.try_add(key, value)
     else:
-         params = {}
+        params = {}
 
     # Cycles must be present for feather-trace measurement parsing
     if PARAMS['cycles'] not in params:

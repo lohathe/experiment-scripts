@@ -16,6 +16,9 @@ TP_PART_TASK = TP_TBASE.format("-p $t.cluster")
 TP_QP_TASK = TP_TBASE.format("-p $t.cpu -S $t.set")
 TP_RUN_TASK = TP_TBASE.format("-S $t.server")
 
+def utilization(t):
+    return Fraction(t.cost, t.period)
+
 class EdfGenerator(gen.Generator):
     '''Creates sporadic task sets with the most common Litmus options.'''
     def __init__(self, scheduler, templates, options, params):
@@ -43,7 +46,9 @@ class EdfGenerator(gen.Generator):
                                   gen.NAMED_UTILIZATIONS)
         
         ts = self._create_taskset(exp_params, pdist, udist, exp_params['mutils'])
-
+        
+        exp_params['autils'] = float(sum([utilization(t) for t in ts]))
+        
         self._customize(ts, exp_params)
 
         self._write_schedule(dict(exp_params.items() + [('task_set', ts)]))
@@ -60,10 +65,10 @@ class PartitionedGenerator(EdfGenerator):
             templates + [TP_PART_TASK], options, params)
 
     def _customize(self, taskset, exp_params):
-        clusters  = exp_params['clusters']
+        clusters = exp_params['clusters']
 
-        utils = [0]*clusters
-        tasks = [0]*clusters
+        utils = [0] * clusters
+        tasks = [0] * clusters
 
         if exp_params['release_master'] and clusters != exp_params['cpus']:
             # The first cluster is one CPU smaller to accomodate the
@@ -98,13 +103,10 @@ class GedfGenerator(EdfGenerator):
                                             [], params)
 
 ########## QPS offline functions ##########
-def utilization(t):
-    return Fraction(t.cost, t.period)
-
 def taskToList(t):
     return [t.cpu, t.set, t.client_cpu, t.cost, t.period]
 
-#class QPTask(tasks.SporadicTask):
+# class QPTask(tasks.SporadicTask):
 #    
 #    def __init__(self, id=None, exec_cost=None, period=None, deadline=None, cpu=None, exec_set=0, is_master=False, client_cpu=None):
 #        super(QPTask, self).__init__(exec_cost, period, deadline, id)
@@ -132,12 +134,12 @@ class ExecutionSet:
 class QuasiPartitionedGenerator(EdfGenerator):
     def __init__(self, scheduler, templates, options, params):
         super(QuasiPartitionedGenerator, self).__init__(scheduler,
-                                                   templates + [TP_QP_TASK], 
-                                                   options, 
+                                                   templates + [TP_QP_TASK],
+                                                   options,
                                                    params)
 
     @staticmethod
-    def decreasing_first_fit(items, bins, capacity=Fraction(1,1), weight=id, empty_bin=list):
+    def decreasing_first_fit(items, bins, capacity=Fraction(1, 1), weight=id, empty_bin=list):
         
         sets = [empty_bin() for _ in xrange(0, bins)]
         sums = [Fraction() for _ in xrange(0, bins)]
@@ -152,18 +154,18 @@ class QuasiPartitionedGenerator(EdfGenerator):
                     sums[i] += c
                     break
             else:
-                #overpacking code
-                candidates = [Fraction(1,1) - s for s in sums]
+                # overpacking code
+                candidates = [Fraction(1, 1) - s for s in sums]
                 i = candidates.index(max(candidates))
                 sets[i] += [x]
                 sums[i] += c
-                print 'Overpacking bin {0}'.format(i) #insert here the overpack code
+                print 'Overpacking bin {0}'.format(i)  # insert here the overpack code
                 
         return sets
     
     @staticmethod
     def overpacked(item):
-        return item > Fraction(1,1)
+        return item > Fraction(1, 1)
     
     @staticmethod
     def binsSum(bins, elements):
@@ -188,7 +190,7 @@ class QuasiPartitionedGenerator(EdfGenerator):
     @staticmethod
     def bipartition(qp_bin, qp_sum):
         
-        split_util = qp_sum * Fraction(1,2)
+        split_util = qp_sum * Fraction(1, 2)
         tmp_util = Fraction()
         
         for t in qp_bin:
@@ -205,20 +207,20 @@ class QuasiPartitionedGenerator(EdfGenerator):
     @staticmethod
     def determineExecutionSet(qp_bin, qp_sum, cpu):
         
-        if qp_sum > Fraction(1,1):
+        if qp_sum > Fraction(1, 1):
             surplus = Fraction(qp_sum.numerator - qp_sum.denominator, qp_sum.denominator)
             a_util = sum([utilization(x) for x in qp_bin if x.set == 0]) - surplus
-            b_util = Fraction(1,1) - a_util - surplus
+            b_util = Fraction(1, 1) - a_util - surplus
             a_set = ExecutionSet(cpu, 0, a_util)
             b_set = ExecutionSet(cpu, 1, b_util)
         else:
-            a_set = ExecutionSet(cpu, 0, Fraction(1,1))
-            b_set = ExecutionSet(cpu, 1, Fraction(0,1))
+            a_set = ExecutionSet(cpu, 0, Fraction(1, 1))
+            b_set = ExecutionSet(cpu, 1, Fraction(0, 1))
         return [a_set, b_set]
     
     def _customize(self, taskset, exp_params):
         
-        cpus  = exp_params['cpus']
+        cpus = exp_params['cpus']
         
         # EXAMPLE
         # cpus = 3
@@ -240,9 +242,9 @@ class QuasiPartitionedGenerator(EdfGenerator):
         
         print 'System utilization: {0}'.format(Decimal(sys_util.numerator) / Decimal(sys_util.denominator))
         
-        bins = QuasiPartitionedGenerator.decreasing_first_fit(taskset, 
-                                                   cpus, 
-                                                   Fraction(1,1), 
+        bins = QuasiPartitionedGenerator.decreasing_first_fit(taskset,
+                                                   cpus,
+                                                   Fraction(1, 1),
                                                    lambda x: utilization(x))
         
         sums = QuasiPartitionedGenerator.binsSum(bins, len(bins))
@@ -250,7 +252,7 @@ class QuasiPartitionedGenerator(EdfGenerator):
         masters = list()
         exec_sets = list()
         
-        j = 0 #processor allocation index 
+        j = 0  # processor allocation index 
         while(not QuasiPartitionedGenerator.terminate(sums)):
             
             qp_bins = list()
@@ -258,16 +260,16 @@ class QuasiPartitionedGenerator(EdfGenerator):
             for i in xrange(0, len(bins)):
                 if QuasiPartitionedGenerator.overpacked(sums[i]):
                     
-                    surplus = tasks.SporadicTask(id=t_id, 
-                                                 exec_cost=sums[i].numerator - sums[i].denominator, 
-                                                 period=sums[i].denominator, 
+                    surplus = tasks.SporadicTask(id=t_id,
+                                                 exec_cost=sums[i].numerator - sums[i].denominator,
+                                                 period=sums[i].denominator,
                                                  deadline=sums[i].denominator) 
                     surplus.is_master = True
                     surplus.set = 0
                     surplus.client_cpu = j
                     
                     qp_bins.append(surplus)
-                    masters.append(surplus) #collection of all generated master
+                    masters.append(surplus)  # collection of all generated master
                     
                     tmp_bin = QuasiPartitionedGenerator.bipartition(QuasiPartitionedGenerator.allocate(bins[i], j), sums[i])
                     exec_sets += QuasiPartitionedGenerator.determineExecutionSet(tmp_bin, sums[i], j)
@@ -279,9 +281,9 @@ class QuasiPartitionedGenerator(EdfGenerator):
                 if not QuasiPartitionedGenerator.overpacked(sums[i]):
                     qp_bins = qp_bins + bins[i]
             
-            bins = QuasiPartitionedGenerator.decreasing_first_fit(qp_bins, 
+            bins = QuasiPartitionedGenerator.decreasing_first_fit(qp_bins,
                                            cpus - j,
-                                           Fraction(1,1), 
+                                           Fraction(1, 1),
                                            lambda x: utilization(x))
 
             sums = QuasiPartitionedGenerator.binsSum(bins, len(bins))
@@ -310,7 +312,7 @@ class QPSGenerator(QuasiPartitionedGenerator):
     def __init__(self, params={}):
         super(QPSGenerator, self).__init__("QPS", [], [], params)
 
-#RUN generator
+# RUN generator
 
 def ignore(_):
     pass
@@ -318,7 +320,7 @@ def ignore(_):
 class FixedRateTask(tasks.SporadicTask):
     
     def __init__(self, exec_cost, period, deadline=None, id=None, server=None, level=-1):
-        super(FixedRateTask,self).__init__(exec_cost, period, deadline, id)
+        super(FixedRateTask, self).__init__(exec_cost, period, deadline, id)
         self.server = server
         self.level = level
         self.children = []
@@ -345,10 +347,10 @@ class FixedRateTask(tasks.SporadicTask):
         tot_util = Fraction()
         for t in task_list:
             tot_util += t.util_frac()
-        new_task = FixedRateTask(tot_util.numerator, 
-                                 tot_util.denominator, 
-                                 tot_util.denominator, 
-                                 server, 
+        new_task = FixedRateTask(tot_util.numerator,
+                                 tot_util.denominator,
+                                 tot_util.denominator,
+                                 server,
                                  None,
                                  level)
         
@@ -380,11 +382,7 @@ class RUNGenerator(EdfGenerator):
         self.server_count = 0
     
     def _customize(self, taskset, exp_params):
-        if 'max_util' in exp_params:
-            print 'sched=RUN cpus={0} max_util={1} tasks={2}'.format(unicode(exp_params['cpus']), unicode(exp_params['max_util']), unicode(len(taskset)))
-        else:
-            print 'sched=RUN cpus={0} max_util={1} tasks={2}'.format(unicode(exp_params['cpus']), unicode('0.0'), unicode(len(taskset)))
-        cpus  = exp_params['cpus']
+        cpus = exp_params['cpus']
         self.server_count = 0
         slack_dist = False
         if 'slack_dist' in exp_params:
@@ -396,11 +394,11 @@ class RUNGenerator(EdfGenerator):
             
     def _reductor(self, taskset, cpus, slack_dist):
         
-        #First create fixed-rates        
+        # First create fixed-rates        
         n_tasks = len(taskset)
-        #On heavy task case #tasks may be less than #cpus
+        # On heavy task case #tasks may be less than #cpus
         if (n_tasks < cpus):
-            print 'attention: #cpus has changed from {0} to {1}'.format(unicode(cpus),unicode(n_tasks))
+            print 'attention: #cpus has changed from {0} to {1}'.format(unicode(cpus), unicode(n_tasks))
             cpus = n_tasks
             
         t_id = 0
@@ -412,10 +410,10 @@ class RUNGenerator(EdfGenerator):
             fr_taskset.append(FixedRateTask(t.cost, t.period, t.deadline, t_id))
             t_id += 1
             tot_util += Fraction(t.cost, t.period)
-        #Second distribuites unused cpu capacity (slack-pack)
-        print 'Total utilization: {0}'.format(Decimal(tot_util.numerator)/Decimal(tot_util.denominator))
+        # Second distribuites unused cpu capacity (slack-pack)
+        print 'Total utilization: {0}'.format(Decimal(tot_util.numerator) / Decimal(tot_util.denominator))
         
-        unused_capacity = Fraction(cpus,1) - tot_util
+        unused_capacity = Fraction(cpus, 1) - tot_util
         if (unused_capacity < Fraction()):
             raise Exception('Unfeasible Taskset')
         
@@ -500,7 +498,7 @@ class RUNGenerator(EdfGenerator):
                 t.cost = tmp_frac.numerator
                 t.period = tmp_frac.denominator
                 unused_capacity = Fraction()
-            i+=1            
+            i += 1            
         if (unused_capacity > Fraction()):
             raise Exception('Still capacity unused: ' + str(unused_capacity))
         
@@ -514,18 +512,18 @@ class RUNGenerator(EdfGenerator):
         
         taskset.sort(key=lambda x: x.util_frac(), reverse=True)
         
-        bins = RUNGenerator.worst_fit(taskset, 
-                                      n_bins, 
-                                      Fraction(1,1), 
-                                      lambda x: x.util_frac(), 
+        bins = RUNGenerator.worst_fit(taskset,
+                                      n_bins,
+                                      Fraction(1, 1),
+                                      lambda x: x.util_frac(),
                                       self._misfit)
         while (self.misfit > 0):
-            #n_bins += math.ceil(self.misfit)
-            n_bins += 1 #self.misfit
+            # n_bins += math.ceil(self.misfit)
+            n_bins += 1  # self.misfit
             self.misfit = 0
-            bins = RUNGenerator.worst_fit(taskset, 
-                                          n_bins, 
-                                          Fraction(1,1), 
+            bins = RUNGenerator.worst_fit(taskset,
+                                          n_bins,
+                                          Fraction(1, 1),
                                           lambda x: x.util_frac(),
                                           self._misfit)    
         servers = []
@@ -538,7 +536,7 @@ class RUNGenerator(EdfGenerator):
         return servers
         
     def _misfit(self, x):
-        #self.misfit += x.dual_utilization()
+        # self.misfit += x.dual_utilization()
         self.misfit += 1
            
     def _reduce(self, taskset, level):
@@ -546,18 +544,18 @@ class RUNGenerator(EdfGenerator):
         for t in taskset:
             utilization += t.util_frac()
         
-        new_taskset = self._pack(taskset, 
-                                 int(math.ceil(utilization)), 
+        new_taskset = self._pack(taskset,
+                                 int(math.ceil(utilization)),
                                  level)
         self._dual(new_taskset)
         
-        if (utilization <= Fraction(1,1)):
+        if (utilization <= Fraction(1, 1)):
             return new_taskset
         else:
             return self._reduce(new_taskset, level + 1)
     
     @staticmethod
-    def worst_fit(items, bins, capacity=Fraction(1,1), weight=id, misfit=ignore, empty_bin=list):
+    def worst_fit(items, bins, capacity=Fraction(1, 1), weight=id, misfit=ignore, empty_bin=list):
         sets = [empty_bin() for _ in xrange(0, bins)]
         sums = [Fraction() for _ in xrange(0, bins)]
         for x in items:

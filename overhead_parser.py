@@ -14,12 +14,14 @@ def_out_file = 'out_stat_overhead.csv'
 def_release = 'overh_release.csv'
 def_schedule = 'overh_schedule.csv'
 def_schedule2 = 'overh_schedule2.csv'
+def_schedulep = 'overh_schedulep.csv'
 def_tick = 'overh_tick.csv'
 def_cxs = 'overh_cxs.csv'
 def_latency = 'overh_release_latency.csv'
 def_tree = 'overh_tree.csv'
 def_dir = '.'
 def_percentile = 99.9
+def_freq = float(2000.0)
 
 def parse_args():
     parser = OptionParser("usage: %prog [options]")
@@ -38,6 +40,10 @@ def parse_args():
     
     parser.add_option('-S', '--schedule2', dest='ft_schedule2',
                       help='ft schedule2 csv file',
+                      default=def_schedule2)
+    
+    parser.add_option('-g', '--schedulep', dest='ft_schedulep',
+                      help='ft schedulep csv file',
                       default=def_schedule2)
     
     parser.add_option('-t', '--tick', dest='ft_tick',
@@ -73,6 +79,7 @@ def main():
              'release': None,
              'schedule': None,
              'schedule2': None,
+             'schedulep' : None,
              'tick': None,
              'cxs': None,
              'latency': None,
@@ -90,44 +97,50 @@ def main():
     
     if os.path.exists(opts.ft_release):
         files['release'] = opts.ft_release
-    elif os.path.exists(''.join([def_dir, def_release])):
-        files['release'] = ''.join([def_dir, def_release])
+    elif os.path.exists('/'.join([def_dir, def_release])):
+        files['release'] = '/'.join([def_dir, def_release])
     else:
         pass
     if os.path.exists(opts.ft_schedule):
         files['schedule'] = opts.ft_schedule
-    elif os.path.exists(''.join([def_dir, def_schedule])):
-        files['schedule'] = ''.join([def_dir, def_schedule])
+    elif os.path.exists('/'.join([def_dir, def_schedule])):
+        files['schedule'] = '/'.join([def_dir, def_schedule])
     else:
         pass    
     if os.path.exists(opts.ft_schedule2):
         files['schedule2'] = opts.ft_schedule2
-    elif os.path.exists(''.join([def_dir, def_schedule2])):
-        files['schedule2'] = ''.join([def_dir, def_schedule2])
+    elif os.path.exists('/'.join([def_dir, def_schedule2])):
+        files['schedule2'] = '/'.join([def_dir, def_schedule2])
+    else:
+        pass
+    if os.path.exists(opts.ft_schedulep):
+        files['schedulep'] = opts.ft_schedulep
+    elif os.path.exists('/'.join([def_dir, def_schedulep])):
+        files['schedulep'] = '/'.join([def_dir, def_schedulep])
     else:
         pass
     if os.path.exists(opts.ft_tick):
         files['tick'] = opts.ft_tick
-    elif os.path.exists(''.join([def_dir, def_tick])):
-        files['tick'] = ''.join([def_dir, def_tick])
+    elif os.path.exists('/'.join([def_dir, def_tick])):
+        files['tick'] = '/'.join([def_dir, def_tick])
     else:
         pass
     if os.path.exists(opts.ft_cxs):
         files['cxs'] = opts.ft_cxs
-    elif os.path.exists(''.join([def_dir, def_cxs])):
-        files['cxs'] = ''.join([def_dir, def_cxs])
+    elif os.path.exists('/'.join([def_dir, def_cxs])):
+        files['cxs'] = '/'.join([def_dir, def_cxs])
     else:
         pass
     if os.path.exists(opts.ft_latency):
         files['latency'] = opts.ft_latency
-    elif os.path.exists(''.join([def_dir, def_latency])):
-        files['latency'] = ''.join([def_dir, def_latency])
+    elif os.path.exists('/'.join([def_dir, def_latency])):
+        files['latency'] = '/'.join([def_dir, def_latency])
     else:
         pass
     if os.path.exists(opts.ft_tree):
         files['tree'] = opts.ft_tree
-    elif os.path.exists(''.join([def_dir, def_tree])):
-        files['tree'] = ''.join([def_dir, def_tree])
+    elif os.path.exists('/'.join([def_dir, def_tree])):
+        files['tree'] = '/'.join([def_dir, def_tree])
     else:
         pass
     
@@ -151,12 +164,12 @@ def main():
     
             if tmp_data:
                 percentile = np.percentile(tmp_data, float(opts.percentile))
-                filtered = [v for v in tmp_data if v <= percentile]
-                max_value = long(max(filtered))
-                min_value = long(min(filtered))
-                avg_value = long(np.mean(filtered))
-                std_value = long(np.std(filtered))
-                sum_value = long(sum(filtered))
+                filtered = [v/def_freq for v in tmp_data if v <= percentile]
+                max_value = max(filtered)
+                min_value = min(filtered)
+                avg_value = np.mean(filtered)
+                std_value = np.std(filtered)
+                sum_value = sum(filtered)
            
         except IOError:
             pass
@@ -189,12 +202,12 @@ def main():
     
             if tmp_data:
                 percentile = np.percentile(tmp_data, float(opts.percentile))
-                filtered = [v for v in tmp_data if v <= percentile]
-                max_value = long(max(filtered))
-                min_value = long(min(filtered))
-                avg_value = long(np.mean(filtered))
-                std_value = long(np.std(filtered))
-                sum_value = long(sum(filtered))
+                filtered = [v/def_freq for v in tmp_data if v <= percentile]
+                max_value = max(filtered)
+                min_value = min(filtered)
+                avg_value = np.mean(filtered)
+                std_value = np.std(filtered)
+                sum_value = sum(filtered)
                
         except IOError:
             pass
@@ -227,12 +240,12 @@ def main():
     
             if tmp_data:
                 percentile = np.percentile(tmp_data, float(opts.percentile))
-                filtered = [v for v in tmp_data if v <= percentile]
-                max_value = long(max(filtered))
-                min_value = long(min(filtered))
-                avg_value = long(np.mean(filtered))
-                std_value = long(np.std(filtered))
-                sum_value = long(sum(filtered))
+                filtered = [v/def_freq for v in tmp_data if v <= percentile]
+                max_value = max(filtered)
+                min_value = min(filtered)
+                avg_value = np.mean(filtered)
+                std_value = np.std(filtered)
+                sum_value = sum(filtered)
     
         except IOError:
             pass
@@ -254,6 +267,44 @@ def main():
     std_value = long(0)
     sum_value = long(0)
     
+    if files['schedulep'] != None:
+        try:
+            tmp_data = []
+            
+            with open(files['schedulep'], 'rb') as f:
+                csv_data = csv.reader(f)
+                for row in csv_data:
+                    tmp_data.append(long(row[2].strip()))
+    
+            if tmp_data:
+                percentile = np.percentile(tmp_data, float(opts.percentile))
+                filtered = [v/def_freq for v in tmp_data if v <= percentile]
+                max_value = max(filtered)
+                min_value = min(filtered)
+                avg_value = np.mean(filtered)
+                std_value = np.std(filtered)
+                sum_value = sum(filtered)
+    
+        except IOError:
+            pass
+    
+    data.append(max_value)
+    header.append('schedulep_max')
+    data.append(min_value)
+    header.append('schedulep_min')
+    data.append(avg_value)
+    header.append('schedulep_avg')
+    data.append(std_value)
+    header.append('schedulep_std')
+    data.append(sum_value)
+    header.append('schedulep_sum')
+    
+    max_value = long(0)
+    min_value = long(0)
+    avg_value = long(0)
+    std_value = long(0)
+    sum_value = long(0)
+    
     if files['tick'] != None:
         try:
             tmp_data = []
@@ -265,12 +316,12 @@ def main():
     
             if tmp_data:
                 percentile = np.percentile(tmp_data, float(opts.percentile))
-                filtered = [v for v in tmp_data if v <= percentile]
-                max_value = long(max(filtered))
-                min_value = long(min(filtered))
-                avg_value = long(np.mean(filtered))
-                std_value = long(np.std(filtered))
-                sum_value = long(sum(filtered))
+                filtered = [v/def_freq for v in tmp_data if v <= percentile]
+                max_value = max(filtered)
+                min_value = min(filtered)
+                avg_value = np.mean(filtered)
+                std_value = np.std(filtered)
+                sum_value = sum(filtered)
      
         except IOError:
             pass
@@ -303,12 +354,12 @@ def main():
     
             if tmp_data:
                 percentile = np.percentile(tmp_data, float(opts.percentile))
-                filtered = [v for v in tmp_data if v <= percentile]
-                max_value = long(max(filtered))
-                min_value = long(min(filtered))
-                avg_value = long(np.mean(filtered))
-                std_value = long(np.std(filtered))
-                sum_value = long(sum(filtered))
+                filtered = [v/def_freq for v in tmp_data if v <= percentile]
+                max_value = max(filtered)
+                min_value = min(filtered)
+                avg_value = np.mean(filtered)
+                std_value = np.std(filtered)
+                sum_value = sum(filtered)
      
         except IOError:
             pass
@@ -341,12 +392,12 @@ def main():
     
             if tmp_data:
                 percentile = np.percentile(tmp_data, float(opts.percentile))
-                filtered = [v for v in tmp_data if v <= percentile]
-                max_value = long(max(filtered))
-                min_value = long(min(filtered))
-                avg_value = long(np.mean(filtered))
-                std_value = long(np.std(filtered))
-                sum_value = long(sum(filtered))
+                filtered = [v/def_freq for v in tmp_data if v <= percentile]
+                max_value = max(filtered)
+                min_value = min(filtered)
+                avg_value = np.mean(filtered)
+                std_value = np.std(filtered)
+                sum_value = sum(filtered)
                  
         except IOError:
             pass
@@ -379,12 +430,12 @@ def main():
     
             if tmp_data:
                 percentile = np.percentile(tmp_data, float(opts.percentile))
-                filtered = [v for v in tmp_data if v <= percentile]
-                max_value = long(max(filtered))
-                min_value = long(min(filtered))
-                avg_value = long(np.mean(filtered))
-                std_value = long(np.std(filtered))
-                sum_value = long(sum(filtered))
+                filtered = [v/def_freq for v in tmp_data if v <= percentile]
+                max_value = max(filtered)
+                min_value = min(filtered)
+                avg_value = np.mean(filtered)
+                std_value = np.std(filtered)
+                sum_value = sum(filtered)
           
         except IOError:
             pass
@@ -400,7 +451,7 @@ def main():
     data.append(sum_value)
     header.append('tree_sum')
     
-    with open(''.join([def_dir, opts.out_file]), 'wb') as f:
+    with open('/'.join([def_dir, opts.out_file]), 'wb') as f:
         writer = csv.writer(f)
         #writer.writerow(header)
         writer.writerow(data)

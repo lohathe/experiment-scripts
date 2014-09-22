@@ -40,6 +40,7 @@ def parse_overhead(result, overhead_bin, overhead, cycles, out_dir, err_file):
         m[Type.Avg] = np.mean(data)
         m[Type.Min] = data[0]
         m[Type.Var] = np.var(data)
+        m[Type.Sum] = long(np.sum(data))
 
         result[overhead] = m
 
@@ -76,10 +77,17 @@ def extract_ft_data(result, data_dir, work_dir, cycles):
     with open("%s/%s" % (work_dir, FT_ERR_NAME), 'w') as err_file:
         sorted_bin = sort_ft(bin_file, err_file, work_dir)
 
+        result['SUM'] = Measurement("SUM")
+        result['SUM'][Type.Max] = long(0)
+        result['SUM'][Type.Min] = long(0)
+        result['SUM'][Type.Avg] = long(0)
+        result['SUM'][Type.Var] = long(0)
+        result['SUM'][Type.Sum] = long(0)
         for event in conf.OVH_BASE_EVENTS:
             parse_overhead(result, sorted_bin, event, cycles,
                            work_dir, err_file)
-
+            if event in result:
+                result['SUM'][Type.Sum] += result[event][Type.Sum]
         os.remove(sorted_bin)
 
     return True

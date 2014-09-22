@@ -7,10 +7,11 @@ import numpy as np
 from enum import Enum
 from collections import defaultdict
 
-Type = Enum(['Min','Max','Avg','Var'])
-default_typemap = {Type.Max : {Type.Max : 1, Type.Min : 0, Type.Avg : 0, Type.Var : 0},
-                   Type.Min : {Type.Max : 0, Type.Min : 1, Type.Avg : 0, Type.Var : 0},
-                   Type.Avg : {Type.Max : 1, Type.Min : 1, Type.Avg : 1, Type.Var : 1}}
+Type = Enum(['Min','Max','Avg','Var','Sum'])
+default_typemap = {Type.Max : {Type.Max : 1, Type.Min : 0, Type.Avg : 0, Type.Var : 0, Type.Sum: 0},
+                   Type.Min : {Type.Max : 0, Type.Min : 1, Type.Avg : 0, Type.Var : 0, Type.Sum: 0},
+                   Type.Avg : {Type.Max : 1, Type.Min : 1, Type.Avg : 1, Type.Var : 1, Type.Sum: 1},
+                   Type.Sum : {Type.Max : 0, Type.Min : 0, Type.Avg : 0, Type.Var : 0, Type.Sum: 1}}
 
 def make_typemap():
     return copy.deepcopy(default_typemap)
@@ -38,6 +39,7 @@ class Measurement(object):
         self[Type.Avg] = array.mean()
         self[Type.Var] = array.var()
         self[Type.Min] = array.min()
+        self[Type.Sum] = array.sum() 
         return self
 
     def __check_type(self, type):
@@ -90,7 +92,7 @@ class Summary(Measurement):
             return sum(vals) / len(vals)
 
         for base_type in Type:
-            for sum_type, func in (Type.Min,min),(Type.Max,max),(Type.Avg, avg):
+            for sum_type, func in (Type.Min,min),(Type.Max,max),(Type.Avg, avg),(Type.Sum, sum):
                 if typemap[sum_type][base_type]:
                     val = func([m[base_type] for m in measures])
                     self[sum_type][base_type] = val

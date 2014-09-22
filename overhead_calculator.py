@@ -18,6 +18,8 @@ def main():
     else:
         min_c = 0.0
     
+    print 'Opening {0}'.format(fname)
+    
     with open(fname, 'r') as f:
         data = f.read().strip()
     
@@ -37,6 +39,7 @@ def main():
             real_args.pop(index)
         
         C = float(real_args[-2])
+        print C
         if round((overhead / C), 3) > 0.999:
             min_c = max(min_c, C)
         if (C > min_c):

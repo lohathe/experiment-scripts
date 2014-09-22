@@ -40,8 +40,7 @@ PARAMS = {'sched'   : 'scheduler',       # Scheduler used by run_exps
           'trial'   : 'trial',           # For multiple exps with same config
           'pre'     : 'pre-experiment',  # Run before each experiment
           'post'    : 'post-experiment', # Run after each experiment
-          'trace'   : 'tracers'          # Tracers to run with an experiment
-          }
+          'trace'   : 'tracers',}          # Tracers to run with an experiment
 
 '''Default values for program options.'''
 DEFAULTS = {'duration'    : 10,
@@ -50,14 +49,14 @@ DEFAULTS = {'duration'    : 10,
             'out-run'     : 'run-data',
             'out-parse'   : 'parse-data',
             'out-plot'    : 'plot-data',
-            'cycles'      : '2300'} #ft_freq() or 2000}
+            'cycles'      : 2000}#ft_freq() or 2000}
 
 
 '''Default sched_trace events (this is all of them).'''
 SCHED_EVENTS = range(501, 513)
 
 '''Overhead events.'''
-OVH_BASE_EVENTS  = ['SCHED', 'RELEASE', 'SCHED2', 'TICK', 'CXS', 'LOCK', 'UNLOCK', 'TREE']
+OVH_BASE_EVENTS  = ['SCHED', 'RELEASE', 'SCHED2', 'TICK', 'CXS', 'LOCK', 'UNLOCK', 'TREE', 'PLUGIN_SCHED']
 OVH_ALL_EVENTS   = ["%s_%s" % (e, t) for (e,t) in
                     itertools.product(OVH_BASE_EVENTS, ["START","END"])]
 OVH_ALL_EVENTS  += ['RELEASE_LATENCY']
