@@ -3,7 +3,7 @@ import os
 import pprint
 import schedcat.generator.tasks as tasks
 import shutil as sh
-
+from decimal import Decimal
 from Cheetah.Template import Template
 from common import get_config_option,num_cpus,recordtype
 from config.config import FILES,PARAMS,DEFAULTS
@@ -98,9 +98,9 @@ class Generator(object):
                           'Redirect release interrupts to a single CPU.'),
                 GenOption('duration', float, [durations], 'Experiment duration.')]
         else:
-            max_utils = [float(cpus)]
-            return [GenOption('mutils', float, max_utils,
-                              'Max utilization.'),
+            #max_utils = [float(cpus)]
+            return [#GenOption('mutils', float, max_utils,
+                    #          'Max utilization.'),
                 GenOption('tasks', int, range(cpus, 5*cpus, cpus),
                               'Number of tasks per experiment.'),
                 GenOption('cpus', int, [cpus],
@@ -135,7 +135,7 @@ class Generator(object):
         ts = []
         tries = 0
         if max_util:
-            ts = tg.make_task_set(max_util=max_util, squeeze=False)
+            ts = tg.make_task_set(max_util=max_util, squeeze=True)
         else:
             while len(ts) != params['tasks'] and tries < 100:
                 ts = tg.make_task_set(max_tasks = params['tasks'], max_util=max_util)

@@ -8,12 +8,12 @@ import sys
 import os.path
 import run_exps
 import schedcat.model.tasks as tasks
-from gen.edf_generators import QPSGenerator
+from gen.edf_generators import RUNGenerator
 
 def main():
     
     if len(sys.argv) != 3:
-        raise Exception("Invalid parameters! USAGE: qps_partitioner.py SCHED_FILE CPUS")
+        raise Exception("Invalid parameters! USAGE: run_partitioner.py SCHED_FILE CPUS")
     
     fname = sys.argv[1]
     (path, name) = os.path.split(fname)
@@ -41,14 +41,15 @@ def main():
         #    index = real_args.index('-p') + 2
         index = -2    
         ts.append(tasks.SporadicTask(int(real_args[index + 0]), int(real_args[index + 1])))
-    
-    generator = QPSGenerator()
+    if len(ts) == 0:
+        raise Exception('No task')
+    generator = RUNGenerator()
     generator.out_dir = path
     generator._customize(ts, {'cpus': cpus})
     
-    with open(path + "/" + 'sched.py', 'w') as out_file:
-        for t in ts:
-            out_file.write("-p {0} -S {1} {2} {3}\n".format(t.cpu, t.set, t.cost, t.period))
+    #with open(path + "/" + 'sched.py', 'w') as out_file:
+    #    for t in ts:
+    #        out_file.write("-S {0} {1} {2}\n".format(t.set, t.cost, t.period))
     
 if __name__ == '__main__':
     main()

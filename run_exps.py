@@ -12,6 +12,7 @@ import run.crontab as cron
 import run.tracer as trace
 import csv
 import json
+from fractions import Fraction
 
 from config.config import PARAMS,DEFAULTS,FILES,BINS
 from collections import namedtuple
@@ -156,6 +157,12 @@ def load_sets(fname):
             args.append(row)
     
     for a in args:
+        if long(a[3]) > (sys.maxint >> 31):
+            print("Casting parameters to avoid overflow")
+            den = (sys.maxint >> 31)
+            num = int(long(a[2]) * den / long(a[3]))
+            a[2] = str(num)
+            a[3] = str(den)
         executables.append(Executable(BINS['qps_add_set'], a))
     
     return executables
@@ -170,6 +177,12 @@ def load_masters(fname):
             args.append(row)
     
     for a in args:
+        if long(a[4]) > (sys.maxint >> 31):
+            print("Casting parameters to avoid overflow")
+            den = (sys.maxint >> 31)
+            num = int(long(a[3]) * den / long(a[4]))
+            a[3] = str(num)
+            a[4] = str(den)
         executables.append(Executable(BINS['qps_add_master'], a))
     
     return executables
@@ -214,8 +227,6 @@ def rebuild_tree(data):
 
 def load_nodes(fname):
     
-    root = None
-    args = None
     executables = []
     
     if not(os.path.isfile(fname)):
@@ -231,6 +242,11 @@ def load_nodes(fname):
     args = generate_params_preorder(root)
     
     for a in args:
+        if a[2] > (sys.maxint >> 31):
+            print("Casting parameters to avoid overflow")
+            den = sys.maxint >> 31
+            a[1] = a[1] * den / a[2]
+            a[2] = den
         executables.append(Executable(BINS['run_add_node'], a))
         
     return executables

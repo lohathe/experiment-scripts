@@ -39,8 +39,7 @@ def main():
             real_args.pop(index)
         
         C = float(real_args[-2])
-        print C
-        if round((overhead / C), 3) > 0.999:
+        if C > 0 and round((overhead / C), 3) > 0.999:
             min_c = max(min_c, C)
         if (C > min_c):
             s = 1 - round((overhead / C), 3)

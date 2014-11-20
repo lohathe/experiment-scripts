@@ -155,10 +155,10 @@ class Experiment(object):
     
     def __run_pre_executables(self):
         self.log("Running %d pre-exec" % len(self.pre_executables))
-        for e in self.pre_executables:
+        for i,e in enumerate(self.pre_executables):
             try:
                 e.execute()
-                time.sleep(0.3)
+                time.sleep(0.2)
             except:
                 raise Exception("Executable failed to start: %s" % e)
                     

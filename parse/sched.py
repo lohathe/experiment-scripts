@@ -9,31 +9,43 @@ from common import recordtype,log_once
 from point import Measurement
 from ctypes import *
 from heapq import *
+from config.config import PREEMPTION_THRESHOLD
 
 class EventTraker:
     def __init__(self, sync_release_time = 0):
         self.sync_release_time = sync_release_time
-        self.preemptions= {}
+        self.filtered_preemptions= {}
+        self.preemptions = {}
         self.migrations = {}
-        self.switch_to_buffer = []
+        self.switch_buffer = []
         self.delay_buffer_size = 1
-    
-    def add_switch_to(self, record, time):
-        if len(self.switch_to_buffer) == self.delay_buffer_size:
-            to_queue = self.switch_to_buffer.pop(0)     
+           
+    def add_event(self, record, time):
+        if len(self.switch_buffer) == self.delay_buffer_size:
+            to_queue = self.switch_buffer.pop(0)     
             if to_queue[0].job == record.job:
-                self.preemptions[to_queue[0].job] += 1
-                if to_queue[0].cpu != record.cpu:
-                    self.migrations[to_queue[0].job] += 1
+                if to_queue[0].type == 6 and record.type == 5:
+                    self.preemptions[to_queue[0].job] += 1
+                    if time - to_queue[1] > PREEMPTION_THRESHOLD:  
+                        self.filtered_preemptions[to_queue[0].job] += 1
+                    if to_queue[0].cpu != record.cpu:
+                        self.migrations[to_queue[0].job] += 1
         if not record.job in self.preemptions.keys():
             self.preemptions[record.job] = 0
+            self.filtered_preemptions[record.job] = 0
             self.migrations[record.job] = 0
-        self.switch_to_buffer.append((record, time))
+        self.switch_buffer.append((record, time))
         
     def get_preemptions(self):
         sum = 0
         for job in self.preemptions.keys():
             sum += self.preemptions[job]
+        return sum
+    
+    def get_filtered_preemptions(self):
+        sum = 0
+        for job in self.filtered_preemptions.keys():
+            sum += self.filtered_preemptions[job]
         return sum
     
     def get_migrations(self):
@@ -300,13 +312,14 @@ class SwitchToRecord(SchedRecord):
 
     def process(self, task_dict):
         if task_dict[self.pid].params and self.when >= task_dict[self.pid].preemptions.sync_release_time:
-            task_dict[self.pid].preemptions.add_switch_to(self, self.when)
+            task_dict[self.pid].preemptions.add_event(self, self.when)
 
 class SwitchAwayRecord(SchedRecord):
     FIELDS = [('when', c_uint64)]
 
     def process(self, task_dict):
-        pass
+        if task_dict[self.pid].params and self.when >= task_dict[self.pid].preemptions.sync_release_time:
+            task_dict[self.pid].preemptions.add_event(self, self.when)
         
 class SysReleaseRecord(SchedRecord):
     FIELDS = [('when', c_uint64), ('at', c_uint64)]
@@ -377,6 +390,9 @@ def extract_sched_data(result, data_dir, work_dir):
         stat_data["record-loss"].append(record_loss)
 
         if record_loss > conf.MAX_RECORD_LOSS:
+            log_once("dir = {2}, miss.disjoints = {0}, miss.matches = {1} ratio= {3}%".format(unicode(miss.disjoints()), unicode(miss.matches), unicode(data_dir), unicode(100*record_loss)))
+            
+        if record_loss > conf.MAX_RECORD_LOSS:
             log_once(LOSS_MSG)
             continue
 
@@ -392,10 +408,12 @@ def extract_sched_data(result, data_dir, work_dir):
         stat_data["block-max"].append(tdata.blocks.max / NSEC_PER_MSEC)
         
         preemptions = tdata.preemptions.get_preemptions()
+        filtered_preemptions = tdata.preemptions.get_filtered_preemptions()
         migrations = tdata.preemptions.get_migrations()
         jobs = tdata.preemptions.get_jobs()
         stat_data["jobs"].append(jobs)
         stat_data["preemptions"].append(preemptions)
+        stat_data["filtered-preemptions"].append(filtered_preemptions)
         stat_data["migrations"].append(migrations)
         stat_data["preemptions-per-job"].append(float(preemptions)/jobs)
         stat_data["migrations-per-job"].append(float(migrations)/jobs) 

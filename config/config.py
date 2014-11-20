@@ -43,7 +43,7 @@ PARAMS = {'sched'   : 'scheduler',       # Scheduler used by run_exps
           'trace'   : 'tracers',}          # Tracers to run with an experiment
 
 '''Default values for program options.'''
-DEFAULTS = {'duration'    : 10,
+DEFAULTS = {'duration'    : 5,
             'prog'        : 'rtspin',
             'out-gen'     : 'exps',
             'out-run'     : 'run-data',
@@ -62,6 +62,13 @@ OVH_ALL_EVENTS   = ["%s_%s" % (e, t) for (e,t) in
 OVH_ALL_EVENTS  += ['RELEASE_LATENCY']
 # This event doesn't have a START and END
 OVH_BASE_EVENTS += ['RELEASE_LATENCY']
+
+BEST_EFFORT_LIST = ['PLUGIN_SCHED', 'TREE']
+#CUMULATIVE_OVERHEAD_LIST = ['SCHED', 'RELEASE', 'SCHED2', 'TICK', 'CXS', 'TREE']
+CUMULATIVE_OVERHEAD_LIST = ['PLUGIN_SCHED', 'RELEASE', 'TREE']
+PREEMPTION_THRESHOLD = 20000
+
+#AXES X,Y BOUNDS
 
 # If a task is missing more than this many records, its measurements
 # are not included in sched_trace summaries

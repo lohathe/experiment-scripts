@@ -12,8 +12,10 @@ import pprint
 import csv
 import numpy as np
 
-trace_types = ['cxs', 'plugin-sched', 'release', 'release-latency', 'sched', 'sched2', 'tick', 'tree']
-measure_types = ['avg', 'max', 'min', 'var']
+trace_types = ['cxs', 'plugin-sched', 'release', 'release-latency', 
+               'sched', 'sched2', 'tick', 'tree', 'sum', 'jobs', 
+               'preemptions', 'migrations', 'preemptions-per-job', 'migrations-per-job']
+measure_types = ['avg', 'max', 'min', 'var', 'sum']
 
 def get_class(value, classes):
     for c in classes:
@@ -32,7 +34,7 @@ def gen_plotting_data(collapsed_dict, classes, schedulers, trace_type, measure_t
             if trace_type in v and v[trace_type][measure_type1][measure_type2]: 
                 row += (format(v[trace_type][measure_type1][measure_type2], '.3f'),)
             else:
-                row += (None,)
+                row += (0,)
         if not len(out) > 0:
             out.append(header)
         out.append(row)
@@ -55,8 +57,8 @@ set key left top
 set xlabel '{1}' offset 0, 0.5
 set ylabel '{2}' offset 2
 set yrange [0:]
-plot '{3}' every ::1 using 1:2 w lp ls 2 title columnhead, \\
-'' every ::1 using 1:3 w lp ls 1 title columnhead""".format(out_chartname, xlabel, ylabel, out_dataname)
+plot '{3}' using 1:2 w lp ls 2 title columnhead, \\
+'' using 1:3 w lp ls 1 title columnhead""".format(out_chartname, xlabel, ylabel, out_dataname)
     
     with open(os.path.join(out_dir, out_gnuplotname), "wb") as f:
         f.write(out_template)
@@ -81,7 +83,7 @@ def collapse(dicts_list):
                 data.sort()
                 if not collapsed_dict.has_key(k):
                     collapsed_dict[k] = {}
-                vavg = vmax = vmin = vvar = None
+                vavg = vmax = vmin = vvar = 0
                 
                 if len(data) > 0:
                     vavg = np.mean(data)
@@ -104,7 +106,7 @@ def collapse(dicts_list):
 
 def main():
     if len(sys.argv) < 3:
-        raise Exception("Invalid parameters: USAGE {0} FILE COL_CLASS OUT_DIR [COLLAPSING_CLASS]".format(sys.argv[0]))
+        raise Exception("Invalid parameters: USAGE {0} FILE OUT_DIR [COLLAPSING_CLASS]".format(sys.argv[0]))
     
     fname = sys.argv[1]
     out_dir = sys.argv[2]
@@ -124,7 +126,6 @@ def main():
         raise Exception("Invalid collapsing class")
     
     col_index = evaluated['columns'].index(col_class)
-    autils_index = evaluated['columns'].index('autils')
     scheduler_index = evaluated['columns'].index('scheduler')
     
     classes = []
@@ -142,9 +143,9 @@ def main():
     
     for k in evaluated['rows'].keys():
         if col_class == 'mutils':
-            actual_class = get_class(k[autils_index], classes)
+            actual_class = k[col_index]#get_class(k[autils_index], classes)
         else:
-            actual_class = get_class(k[col_index], classes) #<-- in this case it returns k[col_class]
+            actual_class = k[col_index]#get_class(k[col_index], classes) #<-- in this case it returns k[col_class]
         actual_key = (k[scheduler_index], actual_class)
         if first_collapsed_dict.has_key(actual_key):
             first_collapsed_dict[actual_key] += [evaluated['rows'][k]]
@@ -158,20 +159,15 @@ def main():
         os.stat(out_dir)
     except:
         os.mkdir(out_dir)
-        
-    for t in trace_types:
-        for m in measure_types:
+    
+    plot_traces = ['plugin-sched', 'release', 'sum', 
+                   'jobs', 'preemptions', 'migrations', 
+                   'preemptions-per-job', 'migrations-per-job']
+    plot_measure = ['avg', 'sum']
+    for t in plot_traces:#trace_types:
+        for m in plot_measure:#measure_types:
             get_gnuplot_file(gen_plotting_data(second_collapsed_dict, classes, schedulers, t, 'avg', m), 
                              out_dir, '_'.join([t, m, 'avg']))
-    #for t in trace_types:
-    #    for m in measure_types: #dirty
-    #        third_collapsed_dict = {}
-    #        for k in second_collapsed_dict.keys():
-    #            sch, cls = k
-    #            third_collapsed_dict[sch] = {cls : second_collapsed_dict[k][t][m]['avg']}
-    #            
-    pass
-
         
 if __name__ == '__main__':
     main()

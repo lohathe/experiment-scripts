@@ -101,7 +101,7 @@ class FieldStyle(StyleMap):
                 t = float if float(value) % 1.0 else int
             except:
                 t = bool if value in ['True','False'] else str
-            return StyleMap.ORDER.index(t)
+            return FieldStyle.ORDER.index(t)
 
         def column_compare(cola, colb):
             lena = len(col_values[cola])
