@@ -19,9 +19,11 @@ def parse_overhead(result, overhead_bin, overhead, cycles, out_dir, err_file):
     if os.path.exists(ovh_fname):
         os.remove(ovh_fname)
     ovh_file = open(ovh_fname, 'w')
-
-    # Extract matching overhead events into a seperate file
-    cmd  = [conf.BINS["ftsplit"], "-r", "-b", overhead, overhead_bin]
+    
+    if overhead in conf.BEST_EFFORT_LIST:
+        cmd  = [conf.BINS["ftsplit"], "-r", "-b", overhead, overhead_bin]
+    else:
+        cmd  = [conf.BINS["ftsplit"], "-r", overhead, overhead_bin]
     ret  = subprocess.call(cmd, cwd=out_dir, stderr=err_file, stdout=ovh_file)
     size = os.stat(ovh_fname).st_size
 
@@ -86,7 +88,7 @@ def extract_ft_data(result, data_dir, work_dir, cycles):
         for event in conf.OVH_BASE_EVENTS:
             parse_overhead(result, sorted_bin, event, cycles,
                            work_dir, err_file)
-            if event in result:
+            if (event in result) and (event in conf.CUMULATIVE_OVERHEAD_LIST):
                 result['SUM'][Type.Sum] += result[event][Type.Sum]
         os.remove(sorted_bin)
 

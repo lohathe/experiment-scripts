@@ -44,9 +44,10 @@ class EdfGenerator(gen.Generator):
         udist = self._create_dist('utilization',
                                   exp_params['utils'],
                                   gen.NAMED_UTILIZATIONS)
-        
-        ts = self._create_taskset(exp_params, pdist, udist, exp_params['mutils'])
-        
+        if 'mutils' in exp_params:
+            ts = self._create_taskset(exp_params, pdist, udist, Decimal(exp_params['mutils']))
+        else:
+            ts = self._create_taskset(exp_params, pdist, udist)
         exp_params['autils'] = float(sum([utilization(t) for t in ts]))
         
         self._customize(ts, exp_params)
@@ -319,7 +320,7 @@ def ignore(_):
 
 class FixedRateTask(tasks.SporadicTask):
     
-    def __init__(self, exec_cost, period, deadline=None, id=None, server=None, level=-1):
+    def __init__(self, exec_cost, period, deadline=None, id=None, server=0, level=-1):
         super(FixedRateTask, self).__init__(exec_cost, period, deadline, id)
         self.server = server
         self.level = level
@@ -407,6 +408,7 @@ class RUNGenerator(EdfGenerator):
         
         for t in taskset:
             t.id = t_id
+            t.server = 0
             fr_taskset.append(FixedRateTask(t.cost, t.period, t.deadline, t_id))
             t_id += 1
             tot_util += Fraction(t.cost, t.period)
@@ -415,8 +417,9 @@ class RUNGenerator(EdfGenerator):
         
         unused_capacity = Fraction(cpus, 1) - tot_util
         if (unused_capacity < Fraction()):
-            raise Exception('Unfeasible Taskset')
-        
+            print 'Unfeasible Taskset'
+            return {}
+    
         if (slack_dist):
             fr_taskset.sort(key=lambda x: x.util_frac(), reverse=True)
             self._distribuite_slack(fr_taskset, unused_capacity)
@@ -431,6 +434,7 @@ class RUNGenerator(EdfGenerator):
         unit_server = self._reduce(new_taskset, 1)
         
         if (len(unit_server) != 1):
+            print len(unit_server)
             raise Exception('Not a Unit-Server')
         
         if (unit_server[0].util_frac() != Fraction() and not(unit_server[0].util_frac().numerator == unit_server[0].util_frac().denominator)):
@@ -448,52 +452,53 @@ class RUNGenerator(EdfGenerator):
                     
         return FixedRateTask.serialize(unit_server[0])
     
-    def _slack_dist(self, ts, slack):
-        
-        n_tasks = len(ts)
-        val_a = ts[0].dual_utilization()
-        val_b = slack / Decimal(n_tasks)
-        
-        unused_capacity = slack
-        
-        task_extra_util = min(val_a, val_b)
-        for t in ts:
-            if (t.dual_utilization() <= task_extra_util):
-                unused_capacity -= t.dual_utilization()
-                t.cost = t.period
-            else:
-                tmp_util = t.utilization()
-                t.cost += int(task_extra_util * Decimal(t.period))
-                unused_capacity -= (t.utilization() - tmp_util)
-        
-        tries = 10
-        while (unused_capacity > Decimal(0)) and (tries > 0):
-            for t in ts:
-                tmp_value = unused_capacity * Decimal(t.period)
-                if (t.dual_utilization() >= unused_capacity) and tmp_value == int(tmp_value):
-                    t.cost += int(tmp_value)
-                    unused_capacity = Decimal(0)
-                    break
-            if (unused_capacity > Decimal(0)):
-                for t in ts:
-                    if (t.dual_utilization() <= unused_capacity):
-                        unused_capacity -= t.dual_utilization()
-                        t.cost = t.period
-            tries -= 1
-            
-        if (unused_capacity > Decimal(0)):
-            raise Exception('Still capacity unused: ' + str(unused_capacity))
+#     def _slack_dist(self, ts, slack):
+#         
+#         n_tasks = len(ts)
+#         val_a = ts[0].dual_utilization()
+#         val_b = slack / Decimal(n_tasks)
+#         
+#         unused_capacity = slack
+#         
+#         task_extra_util = min(val_a, val_b)
+#         for t in ts:
+#             if (t.dual_utilization() <= task_extra_util):
+#                 unused_capacity -= t.dual_utilization()
+#                 t.cost = t.period
+#             else:
+#                 tmp_util = t.utilization()
+#                 t.cost += int(task_extra_util * Decimal(t.period))
+#                 unused_capacity -= (t.utilization() - tmp_util)
+#         
+#         tries = 10
+#         while (unused_capacity > Decimal(0)) and (tries > 0):
+#             for t in ts:
+#                 tmp_value = unused_capacity * Decimal(t.period)
+#                 if (t.dual_utilization() >= unused_capacity) and tmp_value == int(tmp_value):
+#                     t.cost += int(tmp_value)
+#                     unused_capacity = Decimal(0)
+#                     break
+#             if (unused_capacity > Decimal(0)):
+#                 for t in ts:
+#                     if (t.dual_utilization() <= unused_capacity):
+#                         unused_capacity -= t.dual_utilization()
+#                         t.cost = t.period
+#             tries -= 1
+#             
+#         if (unused_capacity > Decimal(0)):
+#             raise Exception('Still capacity unused: ' + str(unused_capacity))
     
     def _distribuite_slack(self, ts, slack):
         ts.sort(key=lambda x: x.util_frac(), reverse=True)
         i = 0
         unused_capacity = slack        
-        while (unused_capacity > Fraction()) and (i < len(ts)):
+        while (unused_capacity > Fraction(0)) and (i < len(ts)):
             t = ts[i]
             if (t.dual_util_frac() <= unused_capacity):
                 unused_capacity -= t.dual_util_frac()
                 t.cost = t.period
             else:
+                unused_capacity = Fraction()
                 tmp_frac = t.util_frac() + unused_capacity
                 t.cost = tmp_frac.numerator
                 t.period = tmp_frac.denominator
@@ -512,7 +517,7 @@ class RUNGenerator(EdfGenerator):
         
         taskset.sort(key=lambda x: x.util_frac(), reverse=True)
         
-        bins = RUNGenerator.worst_fit(taskset,
+        bins = RUNGenerator.run_decreasing_first_fit(taskset,
                                       n_bins,
                                       Fraction(1, 1),
                                       lambda x: x.util_frac(),
@@ -521,7 +526,7 @@ class RUNGenerator(EdfGenerator):
             # n_bins += math.ceil(self.misfit)
             n_bins += 1  # self.misfit
             self.misfit = 0
-            bins = RUNGenerator.worst_fit(taskset,
+            bins = RUNGenerator.run_decreasing_first_fit(taskset,
                                           n_bins,
                                           Fraction(1, 1),
                                           lambda x: x.util_frac(),
@@ -568,6 +573,25 @@ class RUNGenerator(EdfGenerator):
                 i = sums.index(min(candidates))
                 sets[i] += [x]
                 sums[i] += c
+            else:
+                misfit(x)
+        return sets
+    
+    @staticmethod
+    def run_decreasing_first_fit(items, bins, capacity=Fraction(1, 1), weight=id, misfit=ignore, empty_bin=list):
+        
+        sets = [empty_bin() for _ in xrange(0, bins)]
+        sums = [Fraction() for _ in xrange(0, bins)]
+        
+        items.sort(key=weight, reverse=True)
+        
+        for x in items:
+            c = weight(x)
+            for i in xrange(0, bins):
+                if sums[i] + c <= capacity:
+                    sets[i] += [x]
+                    sums[i] += c
+                    break
             else:
                 misfit(x)
         return sets
