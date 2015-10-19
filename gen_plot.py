@@ -14,7 +14,10 @@ import numpy as np
 
 trace_types = ['cxs', 'plugin-sched', 'release', 'release-latency', 
                'sched', 'sched2', 'tick', 'tree', 'sum', 'jobs', 
-               'preemptions', 'migrations', 'preemptions-per-job', 'migrations-per-job']
+               'preemptions', 'migrations', 'preemptions-per-job', 
+               'migrations-per-job', 
+               'filtered-preemptions',
+               'filtered-preemptions-per-job']
 measure_types = ['avg', 'max', 'min', 'var', 'sum']
 
 def get_class(value, classes):
@@ -46,7 +49,7 @@ def get_gnuplot_file(data, out_dir, out_name, xlabel="Utilization cap", ylabel="
     out_dataname = out_name + '.csv'
     out_template = """#!/usr/bin/gnuplot
 reset
-set terminal pdf dashed enhanced font 'Verdana,9'
+set terminal pdf dashed enhanced font 'Verdana,16'
 set size ratio 0.5
 set output '{0}'
 set datafile separator ","
@@ -131,12 +134,13 @@ def main():
     classes = []
     schedulers = []
     for k in evaluated['rows'].keys():
-        if k[col_index] not in classes:
-            classes.append(k[col_index])
+        if float(k[col_index]) not in classes:
+            classes.append(float(k[col_index]))
         if k[scheduler_index] not in schedulers:
             schedulers.append(k[scheduler_index])
     
     classes.sort()
+    classes = [str(c) for c in classes]
     first_collapsed_dict = {}
     
     #see http://stackoverflow.com/questions/3749512/python-group-by
@@ -160,14 +164,18 @@ def main():
     except:
         os.mkdir(out_dir)
     
-    plot_traces = ['plugin-sched', 'release', 'sum', 
+    plot_traces = ['sched','plugin-sched', 'release', 'sum', 
                    'jobs', 'preemptions', 'migrations', 
-                   'preemptions-per-job', 'migrations-per-job']
-    plot_measure = ['avg', 'sum']
+                   'preemptions-per-job', 'migrations-per-job', 
+                   'filtered-preemptions', 'filtered-preemptions-per-job']
+    #plot_measure = ['avg', 'sum']
+    plot_measure = ['max']
     for t in plot_traces:#trace_types:
         for m in plot_measure:#measure_types:
+            #get_gnuplot_file(gen_plotting_data(second_collapsed_dict, classes, schedulers, t, 'avg', m), 
+            #                 out_dir, '_'.join([t, m, 'avg']))
             get_gnuplot_file(gen_plotting_data(second_collapsed_dict, classes, schedulers, t, 'avg', m), 
-                             out_dir, '_'.join([t, m, 'avg']))
+                             out_dir, '_'.join([t, m, 'max']))
         
 if __name__ == '__main__':
     main()

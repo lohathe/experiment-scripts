@@ -37,12 +37,27 @@ def parse_overhead(result, overhead_bin, overhead, cycles, out_dir, err_file):
         data /= float(cycles) # Scale for processor speed
         data.sort()
 
-        m = Measurement("%s-%s" % (overhead_bin, overhead))
-        m[Type.Max] = data[-1]
-        m[Type.Avg] = np.mean(data)
-        m[Type.Min] = data[0]
-        m[Type.Var] = np.var(data)
-        m[Type.Sum] = long(np.sum(data))
+        #Percentile filtering
+        if conf.PERCENTILE_FILTER_ENABLED:
+            filtered = list() 
+            percentile = np.percentile(data, conf.PERCENTILE)
+            for e in data:
+                if e <= percentile:
+                    filtered.append(e)
+            filtered.sort()
+            m = Measurement("%s-%s" % (overhead_bin, overhead))
+            m[Type.Max] = filtered[-1]
+            m[Type.Avg] = np.mean(filtered)
+            m[Type.Min] = filtered[0]
+            m[Type.Var] = np.var(filtered)
+            m[Type.Sum] = long(np.sum(filtered))
+		else:
+            m = Measurement("%s-%s" % (overhead_bin, overhead))
+            m[Type.Max] = data[-1]
+            m[Type.Avg] = np.mean(data)
+            m[Type.Min] = data[0]
+            m[Type.Var] = np.var(data)
+            m[Type.Sum] = long(np.sum(data))
 
         result[overhead] = m
 

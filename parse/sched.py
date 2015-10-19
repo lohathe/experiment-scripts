@@ -416,7 +416,8 @@ def extract_sched_data(result, data_dir, work_dir):
         stat_data["filtered-preemptions"].append(filtered_preemptions)
         stat_data["migrations"].append(migrations)
         stat_data["preemptions-per-job"].append(float(preemptions)/jobs)
-        stat_data["migrations-per-job"].append(float(migrations)/jobs) 
+        stat_data["migrations-per-job"].append(float(migrations)/jobs)
+        stat_data["filtered-preemptions-per-job"].append(float(filtered_preemptions)/jobs)        
 
     # Summarize value groups
     for name, data in stat_data.iteritems():

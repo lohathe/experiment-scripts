@@ -165,6 +165,64 @@ class QuasiPartitionedGenerator(EdfGenerator):
         return sets
     
     @staticmethod
+    def decreasing_evenly_fit(items, bins, capacity=Fraction(1, 1), weight=id, empty_bin=list):
+        
+        sets = [empty_bin() for _ in xrange(0, bins)]
+        sums = [Fraction() for _ in xrange(0, bins)]
+        
+        items.sort(key=weight, reverse=True)
+        j = 0
+        for x in items:
+            c = weight(x)
+            if j < bins:
+                sets[j] += [x]
+                sums[j] += c
+                j += 1
+            else:
+                for i in xrange(0, bins):
+                    if sums[i] + c <= capacity:
+                        sets[i] += [x]
+                        sums[i] += c
+                        break
+                else:
+                    # overpacking code
+                    for i in xrange(0, bins):
+                        if sums[i] < capacity:
+                            sets[i] += [x]
+                            sums[i] += c
+                            print 'Overpacking bin {0}'.format(i)  # insert here the overpack code
+                            break
+        
+        return sets
+    
+    @staticmethod
+    def decreasing_worst_fit(items, bins, capacity=Fraction(1, 1), weight=id, empty_bin=list):
+        
+        sets = [empty_bin() for _ in xrange(0, bins)]
+        sums = [Fraction() for _ in xrange(0, bins)]
+        
+        items.sort(key=weight, reverse=True)
+        for x in items:
+            c = weight(x)
+            # pick the bin where the item will leave the most space
+            # after placing it, aka the bin with the least sum
+            candidates = [s for s in sums if s + c <= capacity]
+            if candidates:
+                # fits somewhere
+                i = sums.index(min(candidates))
+                sets[i] += [x]
+                sums[i] += c
+            else:
+                # overpacking code
+                candidates = [Fraction(1, 1) - s for s in sums]
+                i = candidates.index(max(candidates))
+                sets[i] += [x]
+                sums[i] += c
+                print 'Overpacking bin {0}'.format(i)  # insert here the overpack code
+        
+        return sets
+    
+    @staticmethod
     def overpacked(item):
         return item > Fraction(1, 1)
     
@@ -243,7 +301,7 @@ class QuasiPartitionedGenerator(EdfGenerator):
         
         print 'System utilization: {0}'.format(Decimal(sys_util.numerator) / Decimal(sys_util.denominator))
         
-        bins = QuasiPartitionedGenerator.decreasing_first_fit(taskset,
+        bins = QuasiPartitionedGenerator.decreasing_evenly_fit(taskset,
                                                    cpus,
                                                    Fraction(1, 1),
                                                    lambda x: utilization(x))
@@ -282,7 +340,7 @@ class QuasiPartitionedGenerator(EdfGenerator):
                 if not QuasiPartitionedGenerator.overpacked(sums[i]):
                     qp_bins = qp_bins + bins[i]
             
-            bins = QuasiPartitionedGenerator.decreasing_first_fit(qp_bins,
+            bins = QuasiPartitionedGenerator.decreasing_evenly_fit(qp_bins,
                                            cpus - j,
                                            Fraction(1, 1),
                                            lambda x: utilization(x))
@@ -300,7 +358,7 @@ class QuasiPartitionedGenerator(EdfGenerator):
             csvwriter = csv.writer(f, delimiter=' ')
             for m in masters:
                 if m.is_master == False:
-                    raise Exception("Not master detected")
+                    raise Exception("No master detected")
                 csvwriter.writerow(taskToList(m))
             
         sets_file = self.out_dir + "/" + FILES['sets_file']
@@ -421,7 +479,6 @@ class RUNGenerator(EdfGenerator):
             return {}
     
         if (slack_dist):
-            fr_taskset.sort(key=lambda x: x.util_frac(), reverse=True)
             self._distribuite_slack(fr_taskset, unused_capacity)
             new_taskset = self._pack(fr_taskset, cpus, 0)
             self._dual(new_taskset)
@@ -492,17 +549,17 @@ class RUNGenerator(EdfGenerator):
         ts.sort(key=lambda x: x.util_frac(), reverse=True)
         i = 0
         unused_capacity = slack        
-        while (unused_capacity > Fraction(0)) and (i < len(ts)):
+        while (unused_capacity > Fraction()) and (i < len(ts)):
             t = ts[i]
-            if (t.dual_util_frac() <= unused_capacity):
-                unused_capacity -= t.dual_util_frac()
-                t.cost = t.period
-            else:
-                unused_capacity = Fraction()
-                tmp_frac = t.util_frac() + unused_capacity
-                t.cost = tmp_frac.numerator
-                t.period = tmp_frac.denominator
-                unused_capacity = Fraction()
+            if t.dual_util_frac() > Fraction():
+                if t.dual_util_frac() <= unused_capacity:
+                    unused_capacity -= t.dual_util_frac()
+                    t.cost = t.period
+                else:
+                    tmp_frac = t.util_frac() + unused_capacity
+                    t.cost = tmp_frac.numerator
+                    t.period = tmp_frac.denominator
+                    unused_capacity = Fraction()
             i += 1            
         if (unused_capacity > Fraction()):
             raise Exception('Still capacity unused: ' + str(unused_capacity))
@@ -517,20 +574,30 @@ class RUNGenerator(EdfGenerator):
         
         taskset.sort(key=lambda x: x.util_frac(), reverse=True)
         
-        bins = RUNGenerator.run_decreasing_first_fit(taskset,
-                                      n_bins,
-                                      Fraction(1, 1),
-                                      lambda x: x.util_frac(),
-                                      self._misfit)
+#         bins = RUNGenerator.run_decreasing_first_fit(taskset,
+#                                       n_bins,
+#                                       Fraction(1, 1),
+#                                       lambda x: x.util_frac(),
+#                                       self._misfit)
+        bins = RUNGenerator.run_decreasing_worst_fit(taskset,
+                                                      n_bins,
+                                                      Fraction(1, 1),
+                                                      lambda x: x.util_frac(),
+                                                      self._misfit)
         while (self.misfit > 0):
             # n_bins += math.ceil(self.misfit)
             n_bins += 1  # self.misfit
             self.misfit = 0
-            bins = RUNGenerator.run_decreasing_first_fit(taskset,
-                                          n_bins,
-                                          Fraction(1, 1),
-                                          lambda x: x.util_frac(),
-                                          self._misfit)    
+#             bins = RUNGenerator.run_decreasing_first_fit(taskset,
+#                                           n_bins,
+#                                           Fraction(1, 1),
+#                                           lambda x: x.util_frac(),
+#                                           self._misfit)
+            bins = RUNGenerator.run_decreasing_worst_fit(taskset,
+                                                          n_bins,
+                                                          Fraction(1, 1),
+                                                          lambda x: x.util_frac(),
+                                                          self._misfit)
         servers = []
         for item in bins:
             tmp_server = FixedRateTask._aggregate(item, self.server_count, level)
@@ -560,9 +627,11 @@ class RUNGenerator(EdfGenerator):
             return self._reduce(new_taskset, level + 1)
     
     @staticmethod
-    def worst_fit(items, bins, capacity=Fraction(1, 1), weight=id, misfit=ignore, empty_bin=list):
+    def run_decreasing_worst_fit(items, bins, capacity=Fraction(1, 1), weight=id, misfit=ignore, empty_bin=list):
+        
         sets = [empty_bin() for _ in xrange(0, bins)]
         sums = [Fraction() for _ in xrange(0, bins)]
+        
         for x in items:
             c = weight(x)
             # pick the bin where the item will leave the most space
@@ -594,4 +663,29 @@ class RUNGenerator(EdfGenerator):
                     break
             else:
                 misfit(x)
+        return sets
+    
+    @staticmethod
+    def run_decreasing_evenly_fit(items, bins, capacity=Fraction(1, 1), weight=id, misfit=ignore, empty_bin=list):
+        
+        sets = [empty_bin() for _ in xrange(0, bins)]
+        sums = [Fraction() for _ in xrange(0, bins)]
+        
+        items.sort(key=weight, reverse=True)
+        j = 0
+        for x in items:
+            c = weight(x)
+            if j < bins:
+                sets[j] += [x]
+                sums[j] += c
+                j += 1
+            else:
+                for i in xrange(0, bins):
+                    if sums[i] + c <= capacity:
+                        sets[i] += [x]
+                        sums[i] += c
+                        break
+                else:
+                    misfit(x)
+                    
         return sets
