@@ -3,6 +3,7 @@ import os
 import re
 import struct
 import subprocess
+import numpy as np
 
 from collections import defaultdict,namedtuple
 from common import recordtype,log_once
@@ -11,55 +12,69 @@ from ctypes import *
 from heapq import *
 from config.config import PREEMPTION_THRESHOLD
 
+class JobInfo:
+    def __init__(self):
+        self.releasetime = 0
+        self.deadlinetime = 0
+        self.completiontime = 0
+        self.starttime = 0
+
 class EventTraker:
-    def __init__(self, sync_release_time = 0):
+    def __init__(self, sync_release_time = 0, systeminfo = None):
         self.sync_release_time = sync_release_time
         self.filtered_preemptions= {}
         self.preemptions = {}
         self.migrations = {}
         self.switch_buffer = []
         self.delay_buffer_size = 1
-           
+        self.system = systeminfo
+
     def add_event(self, record, time):
         if len(self.switch_buffer) == self.delay_buffer_size:
-            to_queue = self.switch_buffer.pop(0)     
+            to_queue = self.switch_buffer.pop(0)
             if to_queue[0].job == record.job:
                 if to_queue[0].type == 6 and record.type == 5:
                     self.preemptions[to_queue[0].job] += 1
-                    if time - to_queue[1] > PREEMPTION_THRESHOLD:  
+                    # consider preemption where the switch_to event happens!
+                    self.system[record.cpu]["preemptions"] += 1
+                    if time - to_queue[1] > PREEMPTION_THRESHOLD:
                         self.filtered_preemptions[to_queue[0].job] += 1
+                        self.system[record.cpu]["filtered_preemptions"] += 1
                     if to_queue[0].cpu != record.cpu:
                         self.migrations[to_queue[0].job] += 1
+
         if not record.job in self.preemptions.keys():
             self.preemptions[record.job] = 0
             self.filtered_preemptions[record.job] = 0
             self.migrations[record.job] = 0
         self.switch_buffer.append((record, time))
-        
+
     def get_preemptions(self):
         sum = 0
         for job in self.preemptions.keys():
             sum += self.preemptions[job]
         return sum
-    
+
     def get_filtered_preemptions(self):
         sum = 0
         for job in self.filtered_preemptions.keys():
             sum += self.filtered_preemptions[job]
         return sum
-    
+
     def get_migrations(self):
         sum = 0
         for job in self.migrations.keys():
             sum += self.migrations[job]
         return sum
-    
+
     def get_jobs(self):
         return len(self.preemptions.keys())
-    
+
 class TimeTracker:
     '''Store stats for durations of time demarcated by sched_trace records.'''
-    def __init__(self, is_valid_duration = lambda x: x > 0, capper = lambda x: x, delay_buffer_size = 1, max_pending = -1, sync_release_time = 0):
+    def __init__(self, is_valid_duration = lambda x: x > 0,
+                 capper = lambda x: x, delay_buffer_size = 1,
+                 max_pending = -1, sync_release_time = 0):
         self.validator = is_valid_duration
         self.capper = capper
         self.avg = self.max = self.num = 0
@@ -89,17 +104,14 @@ class TimeTracker:
         return np.std(self.all_measurements_arr)
 
     def percentile(self, which):
-        if self.all_measurements_arr is None:
-            self.all_measurements_arr = np.asarray(self.all_measurements)
-            self.all_measurements_arr.sort()
-        return stats.scoreatpercentile(self.all_measurements_arr, which)
+        raise Exception("Percentile unimplemented")
 
     def process_completed(self):
         completed = self.start_records.viewkeys() & self.end_records.viewkeys()
         self.matches += len(completed)
         for c in completed:
-            s, stime = self.start_records[c]
-            e, etime = self.end_records[c]
+            _, stime = self.start_records[c]
+            _, etime = self.end_records[c]
             del self.start_records[c]
             del self.end_records[c]
 
@@ -110,19 +122,19 @@ class TimeTracker:
                 self.num += 1
                 self.avg = (old_avg + dur) / float(self.num)
                 self.all_measurements.append(dur)
-                
+
         # Give up on some jobs if they've been hanging around too long.
         # While not strictly needed, it helps improve performance and
         # it is unlikey to cause too much trouble.
         if(self.max_pending >= 0 and len(self.start_records) > self.max_pending):
             to_discard = len(self.start_records) - self.max_pending
-            for i in range(to_discard):
+            for _ in range(to_discard):
                 # pop off the oldest jobs
                 del self.start_records[self.start_records.iterkeys().next()]
             self.discarded += to_discard
         if(self.max_pending >= 0 and len(self.end_records) > self.max_pending):
             to_discard = len(self.end_records) - self.max_pending
-            for i in range(to_discard):
+            for _ in range(to_discard):
                 # pop off the oldest jobs
                 del self.end_records[self.end_records.iterkeys().next()]
             self.discarded += to_discard
@@ -145,7 +157,8 @@ class TimeTracker:
 
 # Data stored for each task
 TaskParams = namedtuple('TaskParams',  ['wcet', 'period', 'cpu'])
-TaskData   = recordtype('TaskData',    ['params', 'jobs', 'blocks', 'misses', 'preemptions'])
+TaskData   = recordtype('TaskData',    ['params', 'jobs', 'blocks', 'misses',
+                                        'preemptions', 'responsetime', 'system'])
 
 # Map of event ids to corresponding class and format
 record_map = {}
@@ -249,11 +262,11 @@ def read_data(task_dict, fnames):
 
     for fname in fnames:
         itera = make_iterator(fname)
-        for w in range(window_size):
+        for _ in range(window_size):
             add_record(itera)
 
     while q:
-        sort_key, record, itera = heappop(q)
+        _, record, itera = heappop(q)
         # fetch another recrod
         add_record(itera)
         record.process(task_dict)
@@ -277,6 +290,7 @@ class ParamRecord(SchedRecord):
     def process(self, task_dict):
         params = TaskParams(self.wcet, self.period, self.partition)
         task_dict[self.pid].params = params
+        #TODO task_dict[self.pid].responsetime = {}
 
 class ReleaseRecord(SchedRecord):
     # 'when' is actually 'release' in sched_trace
@@ -287,6 +301,8 @@ class ReleaseRecord(SchedRecord):
         data.jobs += 1
         if data.params and self.when >= task_dict[self.pid].misses.sync_release_time:
             data.misses.start_time(self, self.deadline)
+            data.responsetime[self.job].releasetime = self.when
+            data.responsetime[self.job].deadlinetime = self.deadline
 
 class CompletionRecord(SchedRecord):
     FIELDS = [('when', c_uint64)]
@@ -294,6 +310,7 @@ class CompletionRecord(SchedRecord):
     def process(self, task_dict):
         if self.when >= task_dict[self.pid].misses.sync_release_time:
             task_dict[self.pid].misses.end_time(self, self.when)
+            task_dict[self.pid].responsetime[self.job].completiontime = self.when
 
 class BlockRecord(SchedRecord):
     FIELDS = [('when', c_uint64)]
@@ -306,21 +323,26 @@ class ResumeRecord(SchedRecord):
 
     def process(self, task_dict):
         task_dict[self.pid].blocks.end_time(self, self.when)
-        
+
 class SwitchToRecord(SchedRecord):
     FIELDS = [('when', c_uint64)]
 
     def process(self, task_dict):
-        if task_dict[self.pid].params and self.when >= task_dict[self.pid].preemptions.sync_release_time:
+        if (task_dict[self.pid].params and
+            self.when >= task_dict[self.pid].preemptions.sync_release_time) :
             task_dict[self.pid].preemptions.add_event(self, self.when)
+            jobdata = task_dict[self.pid].responsetime[self.job]
+            if  jobdata.starttime == 0:
+                jobdata.starttime = self.when
 
 class SwitchAwayRecord(SchedRecord):
     FIELDS = [('when', c_uint64)]
 
     def process(self, task_dict):
-        if task_dict[self.pid].params and self.when >= task_dict[self.pid].preemptions.sync_release_time:
+        if (task_dict[self.pid].params and
+            self.when >= task_dict[self.pid].preemptions.sync_release_time) :
             task_dict[self.pid].preemptions.add_event(self, self.when)
-        
+
 class SysReleaseRecord(SchedRecord):
     FIELDS = [('when', c_uint64), ('at', c_uint64)]
 
@@ -339,16 +361,21 @@ register_record(8, BlockRecord)
 register_record(9, ResumeRecord)
 register_record(11, SysReleaseRecord)
 
+
 def create_task_dict(data_dir, work_dir = None):
     '''Parse sched trace files'''
     bin_files   = conf.FILES['sched_data'].format(".*")
     output_file = "%s/out-st" % work_dir
 
+    systemData = defaultdict(lambda: {"preemptions": 0, "filtered_preemptions": 0})
+
     task_dict = defaultdict(lambda :
                             TaskData(None, 1,
                                 TimeTracker(is_valid_duration = lambda x: x > 0),
                                 TimeTracker(capper = lambda x: max(x, 0)),
-                                EventTraker()))
+                                EventTraker(systeminfo = systemData),
+                                defaultdict(JobInfo),
+                                systemData))
 
     bin_names = [f for f in os.listdir(data_dir) if re.match(bin_files, f)]
     if not len(bin_names):
@@ -366,7 +393,7 @@ def create_task_dict(data_dir, work_dir = None):
     bin_paths = ["%s/%s" % (data_dir,f) for f in bin_names]
     read_data(task_dict, bin_paths)
 
-    return task_dict
+    return (systemData, task_dict)
 
 LOSS_MSG = """Found task missing more than %d%% of its scheduling records.
 These won't be included in scheduling statistics!"""%(100*conf.MAX_RECORD_LOSS)
@@ -375,23 +402,28 @@ Measurements like these are not included in scheduling statistics.
 If a measurement is missing, this is why."""
 
 def extract_sched_data(result, data_dir, work_dir):
-    task_dict = create_task_dict(data_dir, work_dir)
+    system, task_dict = create_task_dict(data_dir, work_dir)
     stat_data = defaultdict(list)
 
     # Group per-task values
-    for tdata in task_dict.itervalues():
+    #for tdata in task_dict.itervalues():
+    for pid, tdata in task_dict.iteritems():
         if not tdata.params:
             # Currently unknown where these invalid tasks come from...
             continue
 
         miss = tdata.misses
-        
+
         record_loss = float(miss.disjoints())/(miss.matches + miss.disjoints())
         stat_data["record-loss"].append(record_loss)
 
         if record_loss > conf.MAX_RECORD_LOSS:
-            log_once("dir = {2}, miss.disjoints = {0}, miss.matches = {1} ratio= {3}%".format(unicode(miss.disjoints()), unicode(miss.matches), unicode(data_dir), unicode(100*record_loss)))
-            
+            log_once("dir = {2}, miss.disjoints = {0}, miss.matches = {1}"+
+                     " ratio= {3}%".format(unicode(miss.disjoints()),
+                                           unicode(miss.matches),
+                                           unicode(data_dir),
+                                           unicode(100*record_loss)))
+
         if record_loss > conf.MAX_RECORD_LOSS:
             log_once(LOSS_MSG)
             continue
@@ -406,7 +438,7 @@ def extract_sched_data(result, data_dir, work_dir):
 
         stat_data["block-avg"].append(tdata.blocks.avg / NSEC_PER_MSEC)
         stat_data["block-max"].append(tdata.blocks.max / NSEC_PER_MSEC)
-        
+
         preemptions = tdata.preemptions.get_preemptions()
         filtered_preemptions = tdata.preemptions.get_filtered_preemptions()
         migrations = tdata.preemptions.get_migrations()
@@ -417,7 +449,36 @@ def extract_sched_data(result, data_dir, work_dir):
         stat_data["migrations"].append(migrations)
         stat_data["preemptions-per-job"].append(float(preemptions)/jobs)
         stat_data["migrations-per-job"].append(float(migrations)/jobs)
-        stat_data["filtered-preemptions-per-job"].append(float(filtered_preemptions)/jobs)        
+        stat_data["filtered-preemptions-per-job"].append(float(filtered_preemptions)/jobs)
+
+        # Manage per task data
+        tempJitter = []
+        tempResponse = []
+        error = 0
+        lastJob = tdata.responsetime[max(tdata.responsetime.keys())]
+        for job in tdata.responsetime.itervalues() :
+            if job == lastJob :
+                # Last job data is garbage! Experiment terminates without
+                # knowing the state of each job!!!
+                continue
+            if ( (job.releasetime < job.starttime) and
+                 (job.starttime < job.completiontime) ):
+                tempJitter.append(float(job.starttime - job.releasetime)/NSEC_PER_MSEC)
+                tempResponse.append(float(job.completiontime - job.starttime)/NSEC_PER_MSEC)
+            else :
+                error += 1
+
+        name = "jitter{}".format(pid)
+        result[name] = Measurement(name).from_array(tempJitter)
+        name = "response{}".format(pid)
+        result[name] = Measurement(name).from_array(tempResponse)
+
+    # Manage system-wide data
+    for key, data in system.iteritems():
+        name = "preemp-cpu{}".format(key)
+        result[name] = Measurement(name).from_array([data["preemptions"]])
+        name = "f_preemp-cpu{}".format(key)
+        result[name] = Measurement(name).from_array([data["filtered_preemptions"]])
 
     # Summarize value groups
     for name, data in stat_data.iteritems():

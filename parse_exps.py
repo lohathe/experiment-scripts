@@ -75,7 +75,7 @@ def parse_exp(exp_force):
 
             # Write overheads into result
             cycles = exp.params[PARAMS['cycles']]
-            ft.extract_ft_data(result, exp.path, exp.work_dir, cycles)
+            #ft.extract_ft_data(result, exp.path, exp.work_dir, cycles)
 
             # Write scheduling statistics into result
             st.extract_sched_data(result, exp.path, exp.work_dir)

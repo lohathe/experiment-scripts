@@ -19,7 +19,7 @@ def parse_overhead(result, overhead_bin, overhead, cycles, out_dir, err_file):
     if os.path.exists(ovh_fname):
         os.remove(ovh_fname)
     ovh_file = open(ovh_fname, 'w')
-    
+
     if overhead in conf.BEST_EFFORT_LIST:
         cmd  = [conf.BINS["ftsplit"], "-r", "-b", overhead, overhead_bin]
     else:
@@ -39,7 +39,7 @@ def parse_overhead(result, overhead_bin, overhead, cycles, out_dir, err_file):
 
         #Percentile filtering
         if conf.PERCENTILE_FILTER_ENABLED:
-            filtered = list() 
+            filtered = list()
             percentile = np.percentile(data, conf.PERCENTILE)
             for e in data:
                 if e <= percentile:
@@ -51,7 +51,7 @@ def parse_overhead(result, overhead_bin, overhead, cycles, out_dir, err_file):
             m[Type.Min] = filtered[0]
             m[Type.Var] = np.var(filtered)
             m[Type.Sum] = long(np.sum(filtered))
-		else:
+        else:
             m = Measurement("%s-%s" % (overhead_bin, overhead))
             m[Type.Max] = data[-1]
             m[Type.Avg] = np.mean(data)
