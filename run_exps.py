@@ -12,7 +12,6 @@ import run.crontab as cron
 import run.tracer as trace
 import csv
 import json
-from fractions import Fraction
 
 from config.config import PARAMS,DEFAULTS,FILES,BINS
 from collections import namedtuple
@@ -147,15 +146,15 @@ def fix_paths(schedule, exp_dir, sched_file):
         schedule['task'][idx] = (task, args)
 
 def load_sets(fname):
-    
+
     args = []
     executables = []
-    
+
     with open(fname, 'r') as f:
         csvreader = csv.reader(f, delimiter=' ')
         for row in csvreader:
             args.append(row)
-    
+
     for a in args:
         if long(a[3]) > (sys.maxint >> 31):
             print("Casting parameters to avoid overflow")
@@ -164,18 +163,18 @@ def load_sets(fname):
             a[2] = str(num)
             a[3] = str(den)
         executables.append(Executable(BINS['qps_add_set'], a))
-    
+
     return executables
 
 def load_masters(fname):
     args = []
     executables = []
-    
+
     with open(fname, 'r') as f:
         csvreader = csv.reader(f, delimiter=' ')
         for row in csvreader:
             args.append(row)
-    
+
     for a in args:
         if long(a[4]) > (sys.maxint >> 31):
             print("Casting parameters to avoid overflow")
@@ -184,11 +183,11 @@ def load_masters(fname):
             a[3] = str(num)
             a[4] = str(den)
         executables.append(Executable(BINS['qps_add_master'], a))
-    
+
     return executables
 
 class Node:
-    
+
     def __init__(self, id, rate_num, rate_den, level, l_c = None, r_s = None):
         self.id = id
         self.rate_num = rate_num
@@ -197,7 +196,7 @@ class Node:
         self.l_c = l_c
         self.r_s = r_s
 
-def generate_params_preorder(node):    
+def generate_params_preorder(node):
     if node is None:
         return [[-1, 0, 0, -1]]
     tmp_list = [[node.id, node.rate_num, node.rate_den, node.level]]
@@ -222,25 +221,25 @@ def parse_node(data):
     return first
 
 def rebuild_tree(data):
-    return Node(data['id'], data['cost'], data['period'], data['level'], 
+    return Node(data['id'], data['cost'], data['period'], data['level'],
                 parse_node(data['children']), None)
 
 def load_nodes(fname):
-    
+
     executables = []
-    
+
     if not(os.path.isfile(fname)):
         raise Exception("Tree file not found")
-    
-    with open(fname, 'r') as f:    
+
+    with open(fname, 'r') as f:
         data = json.load(f)
         root = rebuild_tree(data);
-    
+
     if root is None:
         raise Exception("Parsing failed")
-    
+
     args = generate_params_preorder(root)
-    
+
     for a in args:
         if a[2] > (sys.maxint >> 31):
             print("Casting parameters to avoid overflow")
@@ -248,7 +247,7 @@ def load_nodes(fname):
             a[1] = a[1] * den / a[2]
             a[2] = den
         executables.append(Executable(BINS['run_add_node'], a))
-        
+
     return executables
 
 def load_schedule(name, fname, duration):
@@ -285,11 +284,22 @@ def load_schedule(name, fname, duration):
         # Last argument must always be duration
         real_args = args.split() + [duration]
 
+        # Get the name of the task (for after-processing and matching with pid).
+        # If it exists, it is flagged as '-n'
+        task_id = ""
+        i = 0
+        while i<len(real_args):
+            if real_args[i] == "-n":
+                task_id = real_args[i+1]
+                real_args.pop(i) # remove '-n' from args
+                real_args.pop(i) # remove 'taskname' from args
+                break
+
         # All spins take a -w flag
         if re.match(".*spin$", real_task) and '-w' not in real_args:
             real_args = ['-w'] + real_args
 
-        executables += [Executable(real_task, real_args)]
+        executables += [Executable(real_task, real_args, taskid=task_id)]
 
     return proc_entries, executables
 
@@ -392,16 +402,16 @@ def run_experiment(data, start_message, ignore, jabber):
     work_dir = "%s/tmp" % dir_name
 
     procs, execs = load_schedule(data.name, data.sched_file, data.params.duration)
-    
+
     pre_executables = []
     #Load QPS executables to pass as parameter to Experiment class
     if data.params.scheduler == 'QPS':
-        pre_executables += load_sets(os.path.join(dir_name, FILES['sets_file'])) 
+        pre_executables += load_sets(os.path.join(dir_name, FILES['sets_file']))
         pre_executables += load_masters(os.path.join(dir_name, FILES['masters_file']))
-        
+
     if data.params.scheduler == 'RUN':
         pre_executables += load_nodes(os.path.join(dir_name, FILES['nodes_file']))
-        
+
     exp = Experiment(data.name, data.params.scheduler, work_dir,
                      data.out_dir, procs, execs, data.params.tracers, pre_executables)
 
@@ -418,6 +428,11 @@ def run_experiment(data, start_message, ignore, jabber):
 
     if jabber:
         jabber.send("Completed '%s'" % data.name)
+
+    # Save to file correlation between taskID and pid
+    sched_pid_file = "%s/%s" % (data.out_dir, FILES['taskid_vs_pid'])
+    with open(sched_pid_file, 'w') as f:
+        pprint.pprint('\n'.join(exp.__get_pids()), f)
 
     # Save parameters used to run dataeriment in out_dir
     out_params = dict([(PARAMS['sched'],  data.params.scheduler),

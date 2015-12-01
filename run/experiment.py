@@ -39,6 +39,9 @@ class Experiment(object):
         self.regular_tracers = []
         self.exact_tracers = []
 
+    def __get_pids(self):
+        return ["{}: {}".fromat(e.taskid, e.pid) in e for e in self.executables]
+
     def __setup_tracers(self):
         tracers = [ t(self.working_dir) for t in self.tracer_types ]
 
@@ -152,7 +155,7 @@ class Experiment(object):
             if now_ready != num_ready:
                 wait_start = time.time()
                 num_ready  = now_ready
-    
+
     def __run_pre_executables(self):
         self.log("Running %d pre-exec" % len(self.pre_executables))
         for i,e in enumerate(self.pre_executables):
@@ -161,7 +164,7 @@ class Experiment(object):
                 time.sleep(0.2)
             except:
                 raise Exception("Executable failed to start: %s" % e)
-                    
+
     def __run_tasks(self):
         self.log("Starting %d tasks" % len(self.executables))
 
@@ -258,7 +261,7 @@ class Experiment(object):
         print("[Exp %s]: %s" % (self.name, msg))
 
     def run_exp(self):
-        
+
         self.__to_linux()
 
         succ = False
@@ -271,6 +274,15 @@ class Experiment(object):
             try:
                 self.__run_tasks()
                 self.log("Saving results in %s" % self.finished_dir)
+
+                #write relationship: pid-tasks for post processing
+                task_map = {}
+                for exe in self.executables:
+                    task_map[exe.taskid] = exe.pid
+                f = open("{}/{}".format(self.finished_dir, "pid"), "w")
+                f.write(task_map)
+                f.close()
+
                 succ = True
             except Exception as e:
                 exception = e

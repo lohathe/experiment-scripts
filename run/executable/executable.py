@@ -7,12 +7,14 @@ class Executable(object):
     '''Parent object that represents an executable for use in task-sets.'''
 
     def __init__(self, exec_file, extra_args=None, stdout_file = None,
-                 stderr_file = None, cwd = None):
+                 stderr_file = None, cwd = None, taskid = ""):
         self.exec_file = get_executable(exec_file)
         self.cwd = cwd
         self.stdout_file = stdout_file
         self.stderr_file = stderr_file
         self.sp = None
+        self.taskid = taskid
+        self.pid = -1
 
         if extra_args is None:
             self.extra_args = None
@@ -52,6 +54,7 @@ class Executable(object):
         full_command = self.__get_full_command()
         self.sp = subprocess.Popen(full_command, stdout=self.stdout_file,
                 stderr=self.stderr_file, cwd=self.cwd)
+        self.pid = self.sp.pid
 
     def kill(self):
         self.sp.kill()
