@@ -80,12 +80,12 @@ class Generator(object):
         except:
             rm_config  = False
         release_master = list(set([False, bool(rm_config)]))
-        
+
         if 'durations' in params:
             durations = min(map(int, params['durations']))
         else:
             durations = DEFAULTS[PARAMS['dur']]
-            
+
         if 'mutils' in params:
             max_utils = (map(float, params['mutils']))
             return [GenOption('mutils', float, max_utils,
@@ -154,7 +154,8 @@ class Generator(object):
         '''Write schedule file using current template for @params.'''
         sched_file = self.out_dir + "/" + FILES['sched_file']
         with open(sched_file, 'wa') as f:
-            f.write(str(Template(self.template, searchList=[params])))
+            outstr = str(Template(self.template, searchList=[params]))
+            f.write(outstr)
 
 
     def _write_params(self, params):

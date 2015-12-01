@@ -21,6 +21,7 @@ BINS = {'rtspin'    : get_executable_hint('rtspin', 'liblitmus'),
 '''Names of data files.'''
 FILES = {'params_file' : 'params.py',
          'sched_file'  : 'sched.py',
+         'taskid_vs_pid': 'taskPID.log',
          'ft_data'     : 'ft.bin',
          'ft_matches'  : r'(ft.*\.bin$)|(.*\.ft)',
          'linux_data'  : 'trace.dat',
