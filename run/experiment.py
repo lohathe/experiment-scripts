@@ -40,7 +40,7 @@ class Experiment(object):
         self.exact_tracers = []
 
     def __get_pids(self):
-        return ["{}: {}".fromat(e.taskid, e.pid) in e for e in self.executables]
+        return ["{}:{}".fromat(e.pid, e.taskid) in e for e in self.executables]
 
     def __setup_tracers(self):
         tracers = [ t(self.working_dir) for t in self.tracer_types ]
