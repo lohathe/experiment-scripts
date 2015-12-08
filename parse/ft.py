@@ -12,7 +12,7 @@ FT_SPLIT_NAME  = "overhead={}.bin"
 FT_SORTED_NAME = "sorted-ft.bin"
 FT_ERR_NAME    = "err-ft"
 
-def parse_overhead(result, overhead_bin, overhead, cycles, out_dir, err_file):
+def parse_overhead(result, overhead_bin, overhead, cycles, out_dir, err_file, cpu=-1):
     '''Store statistics for @overhead in @overhead_bin into @result.'''
     ovh_fname = "{}/{}".format(out_dir, FT_SPLIT_NAME).format(overhead)
 
@@ -21,9 +21,19 @@ def parse_overhead(result, overhead_bin, overhead, cycles, out_dir, err_file):
     ovh_file = open(ovh_fname, 'w')
 
     if overhead in conf.BEST_EFFORT_LIST:
-        cmd  = [conf.BINS["ftsplit"], "-r", "-b", overhead, overhead_bin]
+        cmd  = [conf.BINS["ftsplit"], "-r", "-b"]
     else:
-        cmd  = [conf.BINS["ftsplit"], "-r", overhead, overhead_bin]
+        cmd  = [conf.BINS["ftsplit"], "-r"]
+    # If we want to filter PER-CPU events, then we must update the
+    # command line and the name of the saved results
+    measurement_name = "%s-%s" % (overhead_bin, overhead)
+    overhead_name = overhead
+    if cpu != -1:
+        cmd += ["-o", str(cpu)]
+        measurement_name += "-cpu{}".format(cpu)
+        overhead_name += "-cpu{}".format(cpu)
+    cmd += [overhead, overhead_bin]
+
     ret  = subprocess.call(cmd, cwd=out_dir, stderr=err_file, stdout=ovh_file)
     size = os.stat(ovh_fname).st_size
 
@@ -45,21 +55,21 @@ def parse_overhead(result, overhead_bin, overhead, cycles, out_dir, err_file):
                 if e <= percentile:
                     filtered.append(e)
             filtered.sort()
-            m = Measurement("%s-%s" % (overhead_bin, overhead))
+            m = Measurement(measurement_name)
             m[Type.Max] = filtered[-1]
             m[Type.Avg] = np.mean(filtered)
             m[Type.Min] = filtered[0]
             m[Type.Var] = np.var(filtered)
             m[Type.Sum] = long(np.sum(filtered))
         else:
-            m = Measurement("%s-%s" % (overhead_bin, overhead))
+            m = Measurement(measurement_name)
             m[Type.Max] = data[-1]
             m[Type.Avg] = np.mean(data)
             m[Type.Min] = data[0]
             m[Type.Var] = np.var(data)
             m[Type.Sum] = long(np.sum(data))
 
-        result[overhead] = m
+        result[overhead_name] = m
 
         os.remove(ovh_fname)
 
@@ -77,7 +87,7 @@ def sort_ft(ft_file, err_file, out_dir):
 
     return out_fname
 
-def extract_ft_data(result, data_dir, work_dir, cycles):
+def extract_ft_data(result, data_dir, work_dir, cycles, perCPU_data = False):
     data_dir = os.path.abspath(data_dir)
     work_dir = os.path.abspath(work_dir)
 
@@ -105,6 +115,18 @@ def extract_ft_data(result, data_dir, work_dir, cycles):
                            work_dir, err_file)
             if (event in result) and (event in conf.CUMULATIVE_OVERHEAD_LIST):
                 result['SUM'][Type.Sum] += result[event][Type.Sum]
+
+        if perCPU_data == True:
+            for cpu in range(0, conf.MAX_CPUS):
+                suffix = "-cpu{}".format(cpu)
+                result["SUM"+suffix] = Measurement("SUM"+suffix).from_array([long(0)])
+
+                for event in conf.PER_CPU_OVERHEAD_LIST:
+                    parse_overhead(result, sorted_bin, event, cycles,
+                                   work_dir, err_file, cpu=cpu)
+                    if (event+suffix in result) and (event in conf.CUMULATIVE_OVERHEAD_LIST):
+                        result["SUM"+suffix][Type.Sum] += result[event+suffix][Type.Sum]
+
         os.remove(sorted_bin)
 
     return True

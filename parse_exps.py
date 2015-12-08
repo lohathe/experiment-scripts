@@ -17,6 +17,7 @@ from optparse import OptionParser
 from parse.point import ExpPoint
 from parse.tuple_table import TupleTable
 from parse.col_map import ColMapBuilder
+from pprint import pprint
 
 
 def parse_args():
@@ -73,12 +74,12 @@ def parse_exp(exp_force):
 
             result = ExpPoint(name)
 
-            # Write overheads into result
-            cycles = exp.params[PARAMS['cycles']]
-            #ft.extract_ft_data(result, exp.path, exp.work_dir, cycles)
-
             # Write scheduling statistics into result
             st.extract_sched_data(result, exp.path, exp.work_dir)
+
+            # Write overheads into result
+            cycles = exp.params[PARAMS['cycles']]
+            ft.extract_ft_data(result, exp.path, exp.work_dir, cycles, perCPU_data = True)
 
             with open(result_file, 'wb') as f:
                 pickle.dump(result, f)
@@ -254,6 +255,29 @@ def write_output(table, opts):
         else:
             write_csvs(table, opts.out, not opts.verbose)
 
+def manage_pid(exps, opts):
+    output_file = opts.out + ".pid"
+    result  = {}
+
+    for exp in exps:
+        input_file = exp.path + "/" + FILES['taskid_vs_pid']
+        sched = exp.params['scheduler']
+        if os.path.isfile(input_file):
+            f = open(input_file, 'r')
+            for line in f:
+                # splitted = ["PID" "TASKID"]
+                splitted = line.split(':')
+                pid = splitted[0]
+                tid = splitted[1].strip('\n')
+                if tid not in result:
+                    result[tid] = {}
+                result[tid][sched] = pid
+            f.close()
+
+    if len(result) != 0:
+        with open(output_file, 'w') as f:
+            pprint(result, f)
+
 
 def main():
     opts, args = parse_args()
@@ -283,6 +307,8 @@ def main():
         sys.exit(1)
 
     write_output(table, opts)
+    manage_pid(exps, opts)
+
 
 if __name__ == '__main__':
     main()

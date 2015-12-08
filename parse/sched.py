@@ -475,9 +475,9 @@ def extract_sched_data(result, data_dir, work_dir):
 
     # Manage system-wide data
     for key, data in system.iteritems():
-        name = "preemp-cpu{}".format(key)
+        name = "preemptions-cpu{}".format(key)
         result[name] = Measurement(name).from_array([data["preemptions"]])
-        name = "f_preemp-cpu{}".format(key)
+        name = "filtered-preemptions-cpu{}".format(key)
         result[name] = Measurement(name).from_array([data["filtered_preemptions"]])
 
     # Summarize value groups
