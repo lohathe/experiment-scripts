@@ -1,99 +1,33 @@
-#from config.config import FILES, MAX_CPUS
-from sys import stderr
-from os import path, mkdir, remove
+#!/usr/bin/env python
+from sys import stderr, stdout
+from os import path, makedirs, remove
 from shutil import rmtree
-#from collections import defaultdict
-from pprint import pprint
 from subprocess import call
-#from prepare_exp import OUT_DIR
+from plot.snippets import *
+from optparse import OptionParser
 
-FILES = {'taskid_vs_pid': 'taskPID.log'}
-MAX_CPUS = 8
+def parse_args():
+    parser = OptionParser("usage: %prog [options]")
 
-OUT_DIR = "/home/luca/Documents/Workspace/newscript/experiment-scripts/exps/temp"
-INPUT_DIR = "/home/luca/Documents/Workspace/newscript/experiment-scripts/KOKO"
-OUTPUR_DIR = "/home/luca/Documents/Workspace/newscript/experiment-scripts/myplots"
-DATAFILENAME= "/home/luca/Documents/Workspace/newscript/experiment-scripts/KAKA"
-TASKSET_FILE = "/home/luca/Documents/Workspace/newscript/experiment-scripts/exps/temp/input3"
+    parser.add_option('-o', '--out', dest='out',
+                      help='root directory for data output',
+                      default='')
+    parser.add_option('-i', '--input', dest='input',
+                      help='mapped file produced by parse_exps',
+                      default='')
+    parser.add_option('-s', '--system', dest='system',
+                      help='file describing the task-set',
+                      default='')
+    parser.add_option('-c', '--cpucount', default=1, type='int',
+                      dest='cpucount',
+                      help='number cpu to use in the experiments')
+    return parser.parse_args()
 
-plotOutputPrologue="""
-reset
-set terminal {terminal}
-set output "{fname}"
-"""
-plotOutputEpilogue="""
-set output "delete.me"
-"""
-
-plotPalette="""
-# SETTING STYLES
-set style line 100 lt 3 lc rgb '#000000' lw 1 #black
-set style line 101 lt 3 lc rgb '#902020' lw 2 #red
-set style line 102 lt 3 lc rgb '#E07000' lw 2 #orange
-set style line 103 lt 3 lc rgb '#F0A010' lw 2 #yellow
-set style line 104 lt 3 lc rgb '#209020' lw 2 #green
-set style line 105 lt 3 lc rgb '#90C0C0' lw 2 #water
-set style line 106 lt 3 lc rgb '#203090' lw 2 #blue
-set style line 107 lt 3 lc rgb '#808080' lw 2 #gray
-set style line 109 lt 3 lc rgb '#702020' lw 3 #darkRed
-set style line 110 lt 3 lc rgb '#808010' lw 3 #darkYellow
-set style fill solid .90 border lt -1
-set style rect fc lt -1 fs solid 0.15 noborder
-set style arrow 1 head nofilled size screen 0.03,15 ls 109
-set style arrow 2 head nofilled size screen 0.03,15 ls 110
-set boxwidth 0.8 absolute
-set bar .5
-"""
-plotFrameVertical="""
-# SETTING VERTICAL FRAME
-set border 3 front ls 107
-set tics nomirror out scale 0.75
-set format '%g'
-set grid noxtics ytics
-"""
-plotFrameHorizontal="""
-# SETTING HORIZONTAL FRAME
-set border 9 front ls 107
-set format '%g'
-set grid noxtics noytics y2tics
-unset ytics
-unset y2tics
-set xtic rotate right nomirror out scale .75
-set xrange [-2:]
-set y2tics rotate by 90 nomirror out scale .75
-set y2range [0:]
-set size 1, 1
-set key outside top horizontal Right noreverse noenhanced autotitle nobox
-set ylabel "{ylabel}"
-"""
-plotTaskBackground="""
-# Task WCET + Period
-set obj rect from graph 1, second 0 to graph 0, second {WCET} behind fc rgb'#902020' fs solid .4
-set obj rect from graph 1, second {WCET} to graph 0, second {period} behind fc rgb'#F0A010' fs solid .4
-set arrow 1 from -1, second ({ArrowLength}) to -1, second 0 as 1
-set arrow 2 from -1, second ({WCET}-{ArrowLength}) to -1, second {WCET} as 1
-set arrow 3 from -1, second ({Period}-{ArrowLength}) to -1, second {Period} as 2
-set label "WCET" at -1, second ({WCET}-{ArrowLength}-{shift}) right rotate by 90 tc rgb'#702020'
-set label "Period" at -1, second ({Period}-{ArrowLength}-{shift}) right rotate by 90 tc rgb'#809010'
-"""
-plotWordsVertical ="""
-# SETTING HUMAN-READABLE INFO
-set key inside {position} {orientation} Right noreverse noenhanced autotitle nobox
-set title "{title}"
-set xlabel "{xlabel}"
-set ylabel "{ylabel}"
-set yrange [-1:]
-"""
-plotClusteredHistogram="""
-# PLOT TYPE
-set style histogram clustered gap 3 title textcolor lt -1
-set style data histograms
-"""
-plotErrorbarHistogram="""
-# PLOT TYPE
-set style histogram errorbars gap 3 lw 2
-set style data histograms
-"""
+def findSchedulers (parsedData):
+    result = []
+    for element in parsedData['rows']:
+        result.append(element[0])
+    return result
 
 def findCPUs (parsedData, scheduler):
     result = []
@@ -102,25 +36,6 @@ def findCPUs (parsedData, scheduler):
             key[:24] == "filtered-preemptions-cpu"):
             result.append(key[24:])
     return sorted(result, key=lambda x: int(x))
-
-def findTaskPID (parsedData, scheduler):
-    result = []
-    hasID = False
-    filepath = INPUT_DIR+"/"+scheduler+"/"+FILES['taskid_vs_pid']
-    if path.exists(filepath) and path.isfile(filepath):
-        with open(filepath) as f:
-            hasID = True
-            for line in f:
-                temp = line.split(":")
-                result.append( (temp[0].strip(),
-                                temp[1].strip()) ) # (PID, taskID)
-    else :
-        hasID = False
-        for key, _ in parsedData['rows'][(scheduler,)].iteritems():
-            if (len(key)>6 and
-                key[:6] == "jitter"):
-                result.append( (key[6:], "noID") ) # (PID, "noID")
-    return hasID, result
 
 def get_data(data, key1, key2="sum"):
     result = 0
@@ -132,15 +47,19 @@ SCHOVH = 0
 CXSOVH = 1
 RELOVH = 2
 PREOVH = 3
+MIGOVH = 4
+MISOVH = 5
 IN = 0
 OUT = 1
-YAXIS = 3
+YAXIS = 2
 DataUtil = {SCHOVH: {IN: "sum", OUT: "scheduling overhead", YAXIS: "ms"},
             CXSOVH: {IN: "cxs", OUT: "context-switch overhead", YAXIS: "ms"},
             RELOVH: {IN: "release-latency", OUT: "max release latency", YAXIS: "ms"},
-            PREOVH: {IN: "preemptions", OUT: "preemptions count", YAXIS: "count"}}
+            PREOVH: {IN: "preemptions", OUT: "preemptions count", YAXIS: "count"},
+            MIGOVH: {IN: "migrations", OUT: "migrations count", YAXIS: "count"},
+            MISOVH: {IN: "miss-ratio", OUT: "deadline misses", YAXIS: "percentage"}}
 
-def prepare_perCPU_data(parsedData, scheduler):
+def prepare_perCPU_data(parsedData, scheduler, cpuCount):
     perCPU = {SCHOVH: [],
               CXSOVH: [],
               RELOVH: [],
@@ -159,46 +78,60 @@ def prepare_perCPU_data(parsedData, scheduler):
         perCPU[RELOVH].append( get_data(data, DataUtil[RELOVH][IN]+target, "max"))
         perCPU[PREOVH].append( get_data(data, prefix+DataUtil[PREOVH][IN]+target, "sum"))
 
+    # in case some CPUs were not used in the experiments (because of slack)
+    for _ in range(0, cpuCount - len(cpus)):
+        perCPU[SCHOVH].append(0)
+        perCPU[CXSOVH].append(0)
+        perCPU[RELOVH].append(0)
+        perCPU[PREOVH].append(0)
+
     return perCPU
 
-def plot_perCPU_data(parsedData):
-    schedulers = ["RUN", "RUN2"] # TODO: get list from config file!
+def plot_perCPU_data(opts, parsedData):
+    #schedulers = AUTOMATE_SCHEDULER_LIST
+    schedulers = findSchedulers(parsedData)
+    cpuCount = opts.cpucount
 
     easyData = {}
+    outputDir = path.abspath(opts.out) + "/charts"
     for scheduler in schedulers:
-        easyData[scheduler] = prepare_perCPU_data(parsedData, scheduler)
+        easyData[scheduler] = prepare_perCPU_data(parsedData, scheduler, cpuCount)
 
     # For each overhead:
     for overhead in [SCHOVH, CXSOVH, RELOVH, PREOVH]:
+        ymax = 0
+
         # (1) print the histogram data file used by gnuplot
-        datafile = OUTPUR_DIR + "/temp{}".format(overhead)
+        datafile = outputDir + "/temp{}".format(overhead)
         try :
             f = open(datafile, "w")
             for scheduler in schedulers:
-                k1 = scheduler + " "
-                k2 = " ".join(map(str, easyData[scheduler][overhead]))
-                f.write(scheduler+" "+" ".join(map(str, easyData[scheduler][overhead]))+"\n")
+                f.write(scheduler+" " +
+                        " ".join(map(str,easyData[scheduler][overhead]))+"\n")
+                ymax = max(easyData[scheduler][overhead]+[ymax])
         except :
-            stderr("Some problem (1) for perCPU overhead {}".format(overhead))
+            stderr.write("Problem (1) for perCPU overhead {}\n".format(overhead))
         finally:
             f.close()
 
         # (2) prepare the gnuplot script
         script = ""
-        script += plotOutputPrologue.format(terminal = "pdf colour enhanced",
-                                            fname = OUTPUR_DIR+"/Chart{}perCPU.pdf".format(overhead))
+        script += plotOutputPrologue.format(terminal = "png truecolor butt",
+                    fname = outputDir+"/Chart{}perCPU.png".format(overhead))
         script += plotPalette
         script += plotFrameVertical
         script += plotWordsVertical.format(position="right top",
-                                           orientation="horizontal",
-                                           title=DataUtil[overhead][OUT],
-                                           xlabel="scheduler",
-                                           ylabel=DataUtil[overhead][YAXIS])
+                    orientation="horizontal",
+                    title=DataUtil[overhead][OUT]+" (per CPU)",
+                    xlabel="scheduler",
+                    ylabel=DataUtil[overhead][YAXIS],
+                    ymax=1.1*ymax)
         script += plotClusteredHistogram
         script += "plot '{infile}' u 2:xtic(1) ti 'CPU_i, i=(0 ... {n})' ls 107".format(
-            infile=datafile, n=MAX_CPUS-1)
-        for i in range (1, MAX_CPUS):
-            script += ", '{infile}' u {cpu}:xtic(1) ls 107 noti ".format(infile=datafile, cpu=i+2)
+            infile=datafile, n=cpuCount-1)
+        for i in range (1, cpuCount):
+            script += ", '{infile}' u {cpu}:xtic(1) ls 107 noti ".format(
+                infile=datafile, cpu=i+2)
         script += "\n"+plotOutputEpilogue
 
         # (3) print the gnuplot script
@@ -206,7 +139,95 @@ def plot_perCPU_data(parsedData):
             f = open(datafile+".script", "w")
             f.write(script)
         except :
-            stderr("Some problem (2) for perCPU overhead {}".format(overhead))
+            stderr.write("Problem (2) for perCPU overhead {}\n".format(overhead))
+        finally:
+            f.close()
+
+        # (4) execute gnuplot on the script and remove temp files
+        scriptFile = datafile+".script"
+        call(["gnuplot", scriptFile])
+        remove(datafile)
+        remove(datafile+".script")
+
+
+def prepare_system_data(parsedData, schedulers):
+    system = {SCHOVH: [],
+              CXSOVH: [],
+              RELOVH: [],
+              PREOVH: [],
+              MIGOVH: [],
+              MISOVH: []}
+
+    for scheduler in schedulers:
+        data = parsedData['rows'][(scheduler,)]
+        prefix = ""
+        if scheduler == "QPS":
+            prefix = "filtered-"
+        else :
+            prefix = ""
+        system[SCHOVH].append( get_data(data, DataUtil[SCHOVH][IN], "sum"))
+        system[CXSOVH].append( get_data(data, DataUtil[CXSOVH][IN], "sum"))
+        system[RELOVH].append( get_data(data, DataUtil[RELOVH][IN], "max"))
+        system[PREOVH].append( get_data(data, prefix+DataUtil[PREOVH][IN], "sum"))
+        system[MIGOVH].append( get_data(data, DataUtil[MIGOVH][IN], "sum"))
+        system[MISOVH].append( get_data(data, DataUtil[MISOVH][IN], "sum"))
+
+    return system
+
+def plot_system_data(opts, parsedData):
+    #schedulers = AUTOMATE_SCHEDULER_LIST
+    schedulers = findSchedulers(parsedData)
+
+    easyData = prepare_system_data(parsedData, schedulers)
+    outputDir = path.abspath(opts.out) + "/charts"
+
+    # For each overhead:
+    for overhead in [SCHOVH, CXSOVH, RELOVH, PREOVH, MIGOVH, MISOVH]:
+        # (1) print the histogram data file used by gnuplot
+        datafile = outputDir + "/temp{}".format(overhead)
+        try :
+            f = open(datafile, "w")
+            f.write("OVH " + " ".join(schedulers) + "\n")
+            f.write("{} ".format(overhead) +
+                    " ".join(map(str, easyData[overhead])) + "\n" )
+        except :
+            stderr.write("Problem (1) for system overhead {}\n".format(overhead))
+        finally:
+            f.close()
+
+        # (2) prepare the gnuplot script
+        suffix = " (cumulative)"
+        if overhead == RELOVH:
+            suffix = ""
+        script = ""
+        script += plotOutputPrologue.format(terminal = "png truecolor butt",
+                      fname = outputDir+"/Chart{}system.png".format(overhead))
+        script += plotPalette
+        script += plotFrameVertical
+        script += plotWordsVertical.format(position="right top",
+                    orientation="horizontal",
+                    title=DataUtil[overhead][OUT] + suffix,
+                    xlabel="",
+                    ylabel=DataUtil[overhead][YAXIS],
+                    ymax=max([1.1, 1.1*max(easyData[overhead])]))
+        script += plotClusteredHistogram
+        script += "unset xtics\n"
+        script += "plot"
+        for scheduler in schedulers:
+            script += " '{infile}' u {pos}:xtic(1) ti col ls {style}".format(
+                infile=datafile,
+                pos=2+schedulers.index(scheduler),
+                style=102+schedulers.index(scheduler))
+            if scheduler != schedulers[-1]:
+                script+=","
+        script += "\n"+plotOutputEpilogue
+
+        # (3) print the gnuplot script
+        try :
+            f = open(datafile+".script", "w")
+            f.write(script)
+        except :
+            stderr.write("Problem (2) for system overhead {}\n".format(overhead))
         finally:
             f.close()
 
@@ -216,23 +237,20 @@ def plot_perCPU_data(parsedData):
         remove(datafile+".script")
 
 
-def prepare_system_data(parsedData):
-    return None
 
-
-def read_task_set():
+def read_task_set(opts):
     result = {}
-    with open(TASKSET_FILE, 'r') as f:
+    with open(opts.system, 'r') as f:
         for line in f:
-            splitted = line.trim().split(" ")
+            splitted = line.strip().split(" ")
             result[splitted[0]] = [splitted[1], splitted[2]]
     return result
 
-def prepare_perTask_data(parsedData, tid, pids):
+def prepare_perTask_data(parsedData, parsedPid):
     result = {}
     for scheduler in parsedData['rows'].keys():
         sched =  scheduler[0]
-        pid = str(pids[tid][sched])
+        pid = str(parsedPid[sched])
         responseData = parsedData['rows'][scheduler]['response'+pid]
         jitterData = parsedData['rows'][scheduler]['jitter'+pid]
         result[sched] = [responseData['avg'],
@@ -243,49 +261,49 @@ def prepare_perTask_data(parsedData, tid, pids):
                          jitterData['max']]
     return result
 
-def plot_perTask_data(data, pid):
+def plot_perTask_data(opts, parsedData, parsedPid, taskSet):
     #schedulers = ["RUN", "RUN2"]# TODO: get list from config file!
 
     easyData = {}
+    outputDir = path.abspath(opts.out) + "/charts"
     # regroup parsed data into an easier structure for this purpose
-    for tid in pid.keys():
-        easyData[tid] = prepare_perTask_data(data, tid, pid[tid])
-    # read taskset file to determine WCET and period of each task
-    taskSet = read_task_set()
+    for tid in parsedPid.keys():
+        easyData[tid] = prepare_perTask_data(parsedData, parsedPid[tid])
 
     # For each task
     for tid in easyData.keys():
         # (1) print the histogram data file used by gnuplot
-        datafile = OUTPUR_DIR + "/temp{}".format(tid)
-        outfile = OUTPUR_DIR+"/temp{}.png".format(tid)
+        datafile = outputDir + "/temp{}".format(tid)
         datatask = taskSet[tid]
+        ymax = float(datatask[1])*1.05
         try :
             f = open(datafile, "w")
             for scheduler in easyData[tid].keys():
-                k1 = scheduler + " "
-                k2 = " ".join(map(str, easyData[tid][scheduler]))
-                f.write(scheduler+" "+" ".join(map(str, easyData[tid][scheduler]))+"\n")
+                f.write(scheduler+" " +
+                        " ".join(map(str, easyData[tid][scheduler]))+"\n")
+                if max(easyData[tid][scheduler]) > ymax:
+                    ymax = max(easyData[tid][scheduler])
         except :
-            stderr("Some problem (1) for perTask info: {}".format(tid))
+            stderr.write("Problem (1) for perTask info: {}\n".format(tid))
         finally:
             f.close()
 
         # (2) prepare the gnuplot script
         script = ""
-        #script += plotOutputPrologue.format(terminal = "pdf colour enhanced size 5cm, 15cm",
-        #                                    fname = OUTPUR_DIR+"/ChartTask-{}.pdf".format(tid))
-        script += plotOutputPrologue.format(terminal = "png truecolor butt size 800,1800",
-                                            fname = outfile)
+        script += plotOutputPrologue.format(fname = datafile+".png",
+                      terminal = "png truecolor butt size 500,1300")
         script += plotPalette
-        script += plotFrameHorizontal.format(ylable = str(tid))
+        script += plotFrameHorizontal.format(ymax = ymax,
+                                             ylabel = str(tid))
+        # Arrow length is good to be 1/15th of the period????
         script += plotTaskBackground.format(WCET=datatask[0],
                                             Period=datatask[1],
-                                            ArrowLength=datatask[1]/12, #arrow is one 12th of the period
-                                            shift=5 )
+                                            ArrowLength=int(datatask[1])/15,
+                                            shift=2 )
         script += plotErrorbarHistogram
-        script += "plot "+\
-            "'{infile}' u 2:3:4:xtic(1) axes x1y2 ls 104 ti 'response',"+\
-            "'{infile}' u 5:6:7:xtic(1) axes x1y2 ls 105 ti 'jitter'".format(
+        script += """plot \
+            '{infile}' u 2:3:4:xtic(1) axes x1y2 ls 104 ti 'response', \
+            '{infile}' u 5:6:7:xtic(1) axes x1y2 ls 105 ti 'jitter'""".format(
             infile=datafile)
 
         # (3) print the gnuplot script
@@ -293,27 +311,78 @@ def plot_perTask_data(data, pid):
             f = open(datafile+".script", "w")
             f.write(script)
         except :
-            stderr("Some problem (2) for perTask info: {}".format(tid))
+            stderr.write("Problem (2) for perTask info: {}\n".format(tid))
         finally:
             f.close()
 
         # (4) execute gnuplot on the script, rotate image and remove temp files
         call(["gnuplot", datafile+".script"])
-        call(["convert", outfile, "-rotate", "90", OUTPUR_DIR+"/Task-{}.png".format(tid) ])
+        call(["convert", datafile+".png", "-rotate", "90",
+              outputDir+"/Task-{}.png".format(tid) ])
         remove(datafile)
-        remove(outfile)
+        remove(datafile+".png")
         remove(datafile+".script")
 
     return None
 
-# Remove old data if any and create output dir
-if path.exists(OUTPUR_DIR):
-    rmtree(OUTPUR_DIR)
-mkdir(OUTPUR_DIR)
+def create_html(opts, taskSet):
+    table=""
+    tasks=""
+    chartsDir = path.abspath(opts.out)+"/charts"
+    htmlFile = path.abspath(opts.out) + "/automate.html"
+    for tid in sorted(taskSet.keys()):
+        table+="<tr><td>{name}</td><td>{wcet}</td><td>{period}</td></tr>\n".format(
+            name=tid, wcet=taskSet[tid][0], period=taskSet[tid][1])
+        tasks+=("<div class='task'><img class='chart' "+
+                "src='{folder}/Task-{name}.png' /></div>\n".format(
+                    folder=chartsDir, name=tid))
+    with open(htmlFile, "w") as f:
+        f.write(html.format(cpuCount=opts.cpucount,
+                            taskCount=len(taskSet),
+                            duration=5,
+                            plotFolder=chartsDir,
+                            taskTable=table,
+                            taskStats=tasks))
+    return None
 
-f = open(DATAFILENAME, "r")
-data = eval(f.read().strip())
-f2 = open(DATAFILENAME+".pid", "r")
-data2 = eval(f2.read().strip())
-pprint(prepare_perCPU_data(data, "RUN"))
-plot_perCPU_data(data)
+def main():
+    opts, _ = parse_args()
+    if opts.out == "" or opts.input == "" or opts.system == "":
+        stderr.write("Missing some options.\n")
+        return -1
+
+    outputDir = path.abspath(opts.out)
+    # Remove old data if any and create output dir
+    if path.exists(outputDir):
+        rmtree(outputDir)
+    makedirs(outputDir)
+    makedirs(outputDir+"/charts")
+
+    try:
+        fData = open(opts.input, 'r')
+        parsedData = eval(fData.read().strip())
+        fData.close()
+
+        fPid = open(opts.input+".pid", 'r')
+        parsedPid = eval(fPid.read().strip())
+        fPid.close()
+
+        taskSet = read_task_set(opts)
+    except :
+        stderr.write("Something wrong while opening input files.\n")
+
+    stdout.write("Plotting perCPU charts...\n")
+    plot_perCPU_data(opts, parsedData)
+    stdout.write("Plotting system-wide charts...\n")
+    plot_system_data(opts, parsedData)
+    stdout.write("Plotting perTask charts...\n")
+    plot_perTask_data(opts, parsedData, parsedPid, taskSet)
+
+    stdout.write("Creating HTML file...\n")
+    create_html(opts, taskSet)
+    remove("delete.me")
+    stdout.write("AUTOMATE has finished!\n")
+    return None
+
+if __name__ == '__main__':
+    main()
