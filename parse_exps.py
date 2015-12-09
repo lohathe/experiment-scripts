@@ -30,6 +30,11 @@ def parse_args():
                       help='ignore changing parameter values')
     parser.add_option('-f', '--force', action='store_true', default=False,
                       dest='force', help='overwrite existing data')
+    parser.add_option('-t', '--tidtopid', action='store_true', default=False,
+                      dest='tidtopid', help=('find out the PID of the same ' +
+                      'task in the run experiments.'))
+    parser.add_option('-x', '--percpu', action='store_true', default=False,
+                      dest='percpu', help='compute perCPU overhead')
     parser.add_option('-v', '--verbose', action='store_true', default=False,
                       dest='verbose', help='print out data points')
     parser.add_option('-m', '--write-map', action='store_true', default=False,
@@ -50,9 +55,9 @@ def parse_args():
 ExpData = namedtuple('ExpData', ['path', 'params', 'work_dir'])
 
 
-def parse_exp(exp_force):
+def parse_exp(exp_force_percpu):
     # Tupled for multiprocessing
-    exp, force = exp_force
+    exp, force, percpu = exp_force_percpu
 
     result_file = exp.work_dir + "/exp_point.pkl"
     should_load = not force and os.path.exists(result_file)
@@ -79,7 +84,8 @@ def parse_exp(exp_force):
 
             # Write overheads into result
             cycles = exp.params[PARAMS['cycles']]
-            ft.extract_ft_data(result, exp.path, exp.work_dir, cycles, perCPU_data = True)
+            ft.extract_ft_data(result, exp.path, exp.work_dir, cycles,
+                               perCPU_data = percpu)
 
             with open(result_file, 'wb') as f:
                 pickle.dump(result, f)
@@ -155,7 +161,7 @@ def fill_table(table, exps, opts):
     # This is for the com.log_once method to use
                 initializer=com.set_logged_list, initargs=(logged,))
 
-    pool_args = zip(exps, [opts.force]*len(exps))
+    pool_args = zip(exps, [opts.force]*len(exps), [opts.percpu]*len(exps))
     enum = pool.imap_unordered(parse_exp, pool_args, 1)
 
     try:
@@ -256,6 +262,7 @@ def write_output(table, opts):
             write_csvs(table, opts.out, not opts.verbose)
 
 def manage_pid(exps, opts):
+    #TODO: out is dir or file?
     output_file = opts.out + ".pid"
     result  = {}
 
@@ -307,7 +314,8 @@ def main():
         sys.exit(1)
 
     write_output(table, opts)
-    manage_pid(exps, opts)
+    if opts.tidtopid:
+        manage_pid(exps, opts)
 
 
 if __name__ == '__main__':

@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """
     Skipping the "gen_exps.py" script.
     Assuming the input are provided in a text file in the form:
@@ -19,18 +20,25 @@ import shutil as sh
 import schedcat.model.tasks as tasks
 import gen.edf_generators as generators
 from copy import deepcopy
+from optparse import OptionParser
 
-CPU_COUNT = 16
-DURATION = 10
-OUT_DIR = "/home/luca/Documents/Workspace/newscript/experiment-scripts/exps/temp"
-IN_DIR = "/home/luca/Documents/Workspace/newscript/experiment-scripts/exps/temp"
-INPUT_FILE = "input2"
+def parse_args():
+    parser = OptionParser("usage: %prog [options]")
 
-params = {'cpus': CPU_COUNT,
-          'clusters': CPU_COUNT,
-          'release_master': False,
-          'durations': DURATION,
-          'mutils': 0.0}
+    parser.add_option('-o', '--out', default="",
+                      dest='out',
+                      help='directory for data output')
+    parser.add_option('-i', '--input', default="",
+                      dest='input',
+                      help='file describing the task-set')
+    parser.add_option('-c', '--cpucount', default=1, type='int',
+                      dest='cpucount',
+                      help='number cpu to use in the experiments')
+    parser.add_option('-d', '--duration', default=10, type='int',
+                      dest='duration',
+                      help='how long each experiments must run (seconds)')
+    return parser.parse_args()
+
 
 def parse_input( fname ):
     taskSet = []
@@ -53,16 +61,23 @@ def parse_input( fname ):
 """ assume:
     1) rootFolder exists (without trailing separator)
     2) taskSet is a list of SporadicTasks as created by "parse_input"
-    3) params['mutil'] = total utilization of the taskset
     """
-def prepare( generator, rootFolder, taskSet ):
+def prepare( generator, options, folderName, taskSet ):
 
-    if os.path.isdir( rootFolder ):
-        sh.rmtree( rootFolder )
-    os.mkdir( rootFolder )
+    # minimal data structure required by generators.
+    params = {'cpus': options.cpucount,
+              'clusters': options.cpucount,
+              'release_master': False,
+              'durations': options.duration,
+              'mutils': 0.0}
+
+    finalPath = os.path.abspath(options.out) + "/" + folderName
+    if os.path.isdir( finalPath ):
+        sh.rmtree( finalPath )
+    os.makedirs( finalPath )
 
 
-    generator.out_dir = rootFolder
+    generator.out_dir = finalPath
     generator.tasks = taskSet
 
     generator._customize(taskSet, params)
@@ -73,51 +88,29 @@ def prepare( generator, rootFolder, taskSet ):
     return True
 
 
-def prepare_all():
-    ts = parse_input( IN_DIR + "/" + INPUT_FILE )
+def main():
+    opts, _ = parse_args()
+    if opts.out == "" or opts.input == "":
+        sys.stderr.write("Missing input or output folders.\n")
+        return -1
 
+    ts = parse_input( opts.input )
+
+    # Folder names must be the same as config.AUTOMATE_SCHEDULER_LIST
     prepare(generators.PedfGenerator({}),
-            OUT_DIR + "/PEDF",
+            opts, "PSN-EDF",
             deepcopy(ts))
     prepare(generators.GedfGenerator({}),
-            OUT_DIR + "/GEDF",
+            opts, "GSN-EDF",
             deepcopy(ts))
     prepare(generators.RUNGenerator({}),
-            OUT_DIR + "/RUN",
+            opts, "RUN",
             deepcopy(ts))
     prepare(generators.QPSGenerator({}),
-            OUT_DIR + "/QPS",
+            opts, "QPS",
             deepcopy(ts))
 
     print "DONE PREPARING EXPERIMENTS."
 
-prepare_all()
-
-"""
-PARAMS = {"autils": 0.0, "clusters": CPU_COUNT, "cpus": CPU_COUNT,
-          "duration": DURATION, "release_master": False, "scheduler": "LINUX"}
-
-def write_param_file( folder, autils, scheduler ):
-    try:
-        PARAMS["scheduler"] = scheduler
-        PARAMS["autils"] = autils
-        f = open( folder+"/params.py", "w" )
-        pprint.pprint( PARAMS, f )
-    except:
-        sys.stderr.write("Error creating 'param.py' in folder {} for {}"+
-                        "\n".format(folder, scheduler))
-    finally:
-        PARAMS["scheduler"] = "LINUX"
-        PARAMS["autils"] = 0.0
-        f.close()
-
-def write_sched_file( folder, content ):
-    try:
-        f = open( folder+"/sched.py", "w" )
-        f.write( content )
-    except:
-        sys.stderr.write("Error creating 'sched.py' in folder {}"+
-                        "\n".format(folder))
-    finally:
-        f.close()
-"""
+if __name__ == '__main__':
+    main()
