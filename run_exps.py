@@ -294,6 +294,7 @@ def load_schedule(name, fname, duration):
                 real_args.pop(i) # remove '-n' from args
                 real_args.pop(i) # remove 'taskname' from args
                 break
+            i+=1
 
         # All spins take a -w flag
         if re.match(".*spin$", real_task) and '-w' not in real_args:
@@ -428,11 +429,6 @@ def run_experiment(data, start_message, ignore, jabber):
 
     if jabber:
         jabber.send("Completed '%s'" % data.name)
-
-    # Save to file correlation between taskID and pid
-    sched_pid_file = "%s/%s" % (data.out_dir, FILES['taskid_vs_pid'])
-    with open(sched_pid_file, 'w') as f:
-        pprint.pprint('\n'.join(exp.__get_pids()), f)
 
     # Save parameters used to run dataeriment in out_dir
     out_params = dict([(PARAMS['sched'],  data.params.scheduler),

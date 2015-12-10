@@ -5,6 +5,7 @@ from shutil import rmtree
 from subprocess import call
 from plot.snippets import *
 from optparse import OptionParser
+import re
 
 def parse_args():
     parser = OptionParser("usage: %prog [options]")
@@ -21,6 +22,9 @@ def parse_args():
     parser.add_option('-c', '--cpucount', default=1, type='int',
                       dest='cpucount',
                       help='number cpu to use in the experiments')
+    parser.add_option('-d', '--duration', default=1, type='int',
+                      dest='duration',
+                      help='how long each experiments must run (seconds)')
     return parser.parse_args()
 
 def findSchedulers (parsedData):
@@ -251,14 +255,14 @@ def prepare_perTask_data(parsedData, parsedPid):
     for scheduler in parsedData['rows'].keys():
         sched =  scheduler[0]
         pid = str(parsedPid[sched])
-        responseData = parsedData['rows'][scheduler]['response'+pid]
-        jitterData = parsedData['rows'][scheduler]['jitter'+pid]
-        result[sched] = [responseData['avg'],
-                         responseData['min'],
-                         responseData['max'],
-                         jitterData['avg'],
-                         jitterData['min'],
-                         jitterData['max']]
+        responseData = parsedData['rows'][scheduler]#['response'+pid]
+        jitterData = parsedData['rows'][scheduler]#['jitter'+pid]
+        result[sched] = [get_data(responseData, 'response'+pid, 'avg'),
+                         get_data(responseData, 'response'+pid, 'min'),
+                         get_data(responseData, 'response'+pid,'max'),
+                         get_data(jitterData, 'jitter'+pid,'avg'),
+                         get_data(jitterData, 'jitter'+pid,'min'),
+                         get_data(jitterData, 'jitter'+pid,'max')]
     return result
 
 def plot_perTask_data(opts, parsedData, parsedPid, taskSet):
@@ -330,7 +334,9 @@ def create_html(opts, taskSet):
     tasks=""
     chartsDir = path.abspath(opts.out)+"/charts"
     htmlFile = path.abspath(opts.out) + "/automate.html"
-    for tid in sorted(taskSet.keys()):
+    naturalsort = lambda s: [int(t) if t.isdigit() else t.lower()
+                             for t in re.split('(\d+)', s)]
+    for tid in sorted(taskSet.keys(), key=naturalsort):
         table+="<tr><td>{name}</td><td>{wcet}</td><td>{period}</td></tr>\n".format(
             name=tid, wcet=taskSet[tid][0], period=taskSet[tid][1])
         tasks+=("<div class='task'><img class='chart' "+
@@ -339,7 +345,7 @@ def create_html(opts, taskSet):
     with open(htmlFile, "w") as f:
         f.write(html.format(cpuCount=opts.cpucount,
                             taskCount=len(taskSet),
-                            duration=5,
+                            duration=opts.duration,
                             plotFolder=chartsDir,
                             taskTable=table,
                             taskStats=tasks))

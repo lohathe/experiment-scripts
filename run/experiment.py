@@ -2,6 +2,8 @@ import os
 import time
 import run.litmus_util as lu
 import shutil as sh
+import pprint
+from config.config import FILES
 
 from operator import methodcaller
 
@@ -275,12 +277,12 @@ class Experiment(object):
                 self.__run_tasks()
                 self.log("Saving results in %s" % self.finished_dir)
 
-                #write relationship: pid-tasks for post processing
+                # Save to file correlation between taskID and pid
                 task_map = {}
                 for exe in self.executables:
                     task_map[exe.taskid] = exe.pid
-                f = open("{}/{}".format(self.finished_dir, "pid"), "w")
-                f.write(task_map)
+                f = open("{}/{}".format(self.working_dir, FILES['pid_file']), "w")
+                pprint.pprint(task_map, f)
                 f.close()
 
                 succ = True

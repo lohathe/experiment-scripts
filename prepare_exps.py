@@ -68,7 +68,7 @@ def prepare( generator, options, folderName, taskSet ):
     params = {'cpus': options.cpucount,
               'clusters': options.cpucount,
               'release_master': False,
-              'durations': options.duration,
+              'duration': options.duration,
               'mutils': 0.0}
 
     finalPath = os.path.abspath(options.out) + "/" + folderName

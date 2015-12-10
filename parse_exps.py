@@ -197,7 +197,7 @@ def write_csvs(table, out, print_empty=False):
         if print_empty:
             sys.stderr.write("Too little data to make csv files, " +
                              "printing results.\n")
-            for key, exp in table:
+            for _, exp in table:
                 for e in exp:
                     print(e)
     else:
@@ -248,6 +248,9 @@ def write_collapsed_csvs(table, opts):
 def write_output(table, opts):
     if opts.write_map:
         sys.stderr.write("Writing python map into %s...\n" % opts.out)
+        dirPath = os.path.dirname(opts.out)
+        if not os.path.exists(dirPath):
+            os.makedirs(dirPath)
         reduced_table = table.reduce()
         reduced_table.write_map(opts.out)
     else:
@@ -262,24 +265,21 @@ def write_output(table, opts):
             write_csvs(table, opts.out, not opts.verbose)
 
 def manage_pid(exps, opts):
-    #TODO: out is dir or file?
+    # Assume that opts.out is a FILE
     output_file = opts.out + ".pid"
     result  = {}
 
     for exp in exps:
-        input_file = exp.path + "/" + FILES['taskid_vs_pid']
+        input_file = exp.path + "/" + FILES['pid_file']
         sched = exp.params['scheduler']
         if os.path.isfile(input_file):
             f = open(input_file, 'r')
-            for line in f:
-                # splitted = ["PID" "TASKID"]
-                splitted = line.split(':')
-                pid = splitted[0]
-                tid = splitted[1].strip('\n')
+            pidMap = eval(f.read().strip())
+            f.close()
+            for tid in pidMap.keys():
                 if tid not in result:
                     result[tid] = {}
-                result[tid][sched] = pid
-            f.close()
+                result[tid][sched] = pidMap[tid]
 
     if len(result) != 0:
         with open(output_file, 'w') as f:

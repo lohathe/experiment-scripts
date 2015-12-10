@@ -207,8 +207,8 @@ table {{
 
 <h3 id="system-overhead1" class="section">Deadline Misses</h3>
 <div class="info">
-  <p>The <em>deadline misses</em> shows how many time during the whole
-     experiment a task fails to meet its deadline.</p>
+  <p>The <em>deadline misses</em> shows the percentage of jobs in the whole
+     system that failed to meet their deadline.</p>
   <div class="centerchart">
     <img class="chart" src="{plotFolder}/Chart5system.png" />
   </div>
