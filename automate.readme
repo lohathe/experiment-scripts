@@ -1,0 +1,69 @@
+HOW TO USE
+
+1) Put the "automate/scripts" folder anywhere.
+2) Open "automate/automate.sh" in a text editor and modify the variables
+   as requested (see REQUIREMENTS below).
+3) Install/copy "automate/automate.sh" in a folder that is the system PATH
+   variable. Alternatively, add to PATH the "automate" folder.
+4) You can now use "automate.sh" from anywhere.
+   "automate.sh" will perform 4 steps sequentially:
+   (a) generating the experiments to perform
+   (b) running the experiments in litmus
+   (c) parsing the traces produced by the experiments
+   (d) preparing a human readable output
+   If you need to perform these steps once at a time, modify "automate.sh"
+   to do so (i.e., comment the lines of the operations that you want to avoid
+   and make sure the inputs of each operation are correct)
+
+
+REQUIREMENTS
+
+1) LITMUS_RT must be compiled.
+   LITMUS_RT is supplied by us and its instruction can be found in XXX.
+   The produced kernel _must be_ the one running in order to perform 
+   step (b) of "automate.sh".
+
+2) liblitmus must be compiled.
+   liblitmus is supplied by us and its instruction can be found in XXX.
+   Its path must be written inside "automate.sh" in the variable 
+   LIBLITMUS_PATH
+
+3) feather-trace-tools must be compiled.
+   feather-trace-tools is supplied by us and its instruction can be found in XXX.
+   Its path must be written inside "automate.sh" in the variable 
+   FEATHERTRACE_PATH
+
+4) schedCAT must be present in the filesystem.
+   download: `git clone https://github.com/brandenburg/schedcat.git`
+   No further requirements are necessary (contrary to what is stated in the 
+   download link) for its use inside "automate.sh"
+   Its path must be written inside "automate.sh" in the variable 
+   SCHEDCAT_PATH
+   
+5) python version 2.7 is known to work without issues.
+   "cheetah" library must be installed (check with the package manager of your
+   system)
+   
+6) gnuplot must be installed (check with the package manager of your system)
+
+7) "automate.sh" must be supplied with 3 parameters (all 3 must be written
+   inside the specific variables of the file "automate.sh").
+   (o) CPU_COUNT, integer, represents the number of cpus to use for the experiment
+       aka, the degree of parallelism of the system.
+   (o) DURATION, integer, represents the length of each individual experiment
+       aka, how long each scheduler is let running.
+   (o) TASKSET, file path, represents the taskset that will be run.
+       This file must be formatted in a specific way. Any line must contain
+       3 elements separated by spaces:
+       (1) the task's name, an alfa-numeric string (without spaces)
+       (2) the task's WCET, an integer representing a duration in milliseconds
+       (3) the task's period, an integer representing a duration in milliseconds
+       As an example:
+       ==========================
+       task1 10 400
+       controller 35 100
+       icecreamMaker 1000 4000
+       logger 24 75
+       task02341 66 80
+       ==========================
+   

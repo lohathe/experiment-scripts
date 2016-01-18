@@ -4,10 +4,10 @@
 # SchedCAT, libLITMUS, featherTrace
 # If exporting also AUTOMATE_PATH, then this script can be installed in
 # any desired directory and executed from there!
-SCHEDCAT_PATH="/home/luca/RUN/schedcat"
-LITMUS_PATH="/home/luca/RUN/12-liblitmus"
-FEATHERTRACE_PATH="/home/luca/RUN/12-feather-trace-tools"
-AUTOMATE_PATH="/home/luca/Workspace/newscript/experiment-scripts"
+SCHEDCAT_PATH="$HOME/schedcat"
+LITMUS_PATH="$HOME/liblitmus"
+FEATHERTRACE_PATH="$HOME/feather-trace-tools"
+AUTOMATE_PATH="$HOME/automate/scripts"
 
 export PATH=$PATH:$LITMUS_PATH:$FEATHERTRACE_PATH:$AUTOMATE_PATH
 export PYTHONPATH=$PYTHONPATH:$SCHEDCAT_PATH
@@ -16,10 +16,13 @@ export PYTHONPATH=$PYTHONPATH:$SCHEDCAT_PATH
 # file describing the taskset/system
 TASKSET=""
 # number of processors to use in the experiment
-CPU_COUNT=4
+CPU_COUNT=0
 # how long to run each experiment (seconds)
 DURATION=30
 
+echo "============================================================="
+echo ">>  remember to set up the paths variable in automate.sh   <<"
+echo "============================================================="
 echo "Proceding to execute AUTOMATE. This may take a while."
 echo "Several folders and files will be created."
 echo " (o) gen-exps (input used to run the experiments)"
