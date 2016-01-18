@@ -340,8 +340,7 @@ def create_html(opts, taskSet):
         table+="<tr><td>{name}</td><td>{wcet}</td><td>{period}</td></tr>\n".format(
             name=tid, wcet=taskSet[tid][0], period=taskSet[tid][1])
         tasks+=("<div class='task'><img class='chart' "+
-                "src='{folder}/Task-{name}.png' /></div>\n".format(
-                    folder=chartsDir, name=tid))
+                "src='charts/Task-{name}.png' /></div>\n".format(name=tid))
     with open(htmlFile, "w") as f:
         f.write(html.format(cpuCount=opts.cpucount,
                             taskCount=len(taskSet),
