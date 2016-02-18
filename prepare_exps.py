@@ -45,11 +45,17 @@ def parse_input( fname ):
     try:
         f = open(fname, "r")
         for line in f:
-            splitted = line.split(" ")
+            splitted = line.split()
+            # skip empty lines
+            if len(splitted) == 0:
+                continue
+            # skip comment lines (comments start with '#')
+            if splitted[0][0] == '#':
+                continue
             taskSet.append(tasks.SporadicTask(id=splitted[0],
-                                              exec_cost=int(splitted[1]),
-                                              period=int(splitted[2]),
-                                              deadline=int(splitted[2])) )
+                                              exec_cost=float(splitted[1]),
+                                              period=float(splitted[2]),
+                                              deadline=float(splitted[2])) )
     except Exception, e:
         sys.stderr.write("Error opening/parsing the file {}\n".format(fname))
         sys.stderr.write(str(e)+"\n")
@@ -57,6 +63,17 @@ def parse_input( fname ):
         f.close()
     return taskSet
 
+def normalizeTime(taskSet, scaler, conversion):
+    for task in taskSet:
+        task.cost = conversion(task.cost * scaler)
+        task.period = conversion(task.period * scaler)
+        task.deadline = conversion(task.deadline * scaler)
+
+def timeToNanoseconds(taskSet):
+    normalizeTime(taskSet, 10.0**(+6), int)
+
+def timeToMilliseconds(taskSet):
+    normalizeTime(taskSet, 10.0**(-6), float)
 
 """ assume:
     1) rootFolder exists (without trailing separator)
@@ -80,7 +97,9 @@ def prepare( generator, options, folderName, taskSet ):
     generator.out_dir = finalPath
     generator.tasks = taskSet
 
+    timeToNanoseconds(taskSet)
     generator._customize(taskSet, params)
+    timeToMilliseconds(taskSet)
 
     generator._write_schedule(dict(params.items() + [('task_set', taskSet)]))
     generator._write_params(params)
